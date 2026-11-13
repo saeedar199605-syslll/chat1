@@ -71,7 +71,6 @@ interface AppState {
   activeThreadMessageId: string | null;
   theme: ThemeMode;
   locale: LocaleMode;
-  glassMode: boolean;
   sidebarWidth: number;
   searchOpen: boolean;
   settingsOpen: boolean;
@@ -116,7 +115,6 @@ interface AppState {
   setDrawerTab: (tab: DrawerTab) => void;
   setTheme: (theme: ThemeMode) => void;
   setLocale: (locale: LocaleMode) => void;
-  setGlassMode: (enabled: boolean) => void;
   setSidebarWidth: (width: number) => void;
   setSearchOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -158,8 +156,6 @@ interface AppState {
 
 const storedTheme = (typeof window !== 'undefined' && (localStorage.getItem('ws_theme') as ThemeMode)) || 'light';
 const storedLocale = (typeof window !== 'undefined' && (localStorage.getItem('ws_locale') as LocaleMode)) || 'fa';
-const storedGlass =
-  typeof window !== 'undefined' ? localStorage.getItem('ws_glass') !== 'false' : true;
 const storedCalendar =
   (typeof window !== 'undefined' && (localStorage.getItem('ws_calendar') as 'jalali' | 'gregorian')) || 'jalali';
 const storedBgPreset =
@@ -200,7 +196,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeThreadMessageId: null,
   theme: storedTheme,
   locale: storedLocale,
-  glassMode: storedGlass,
   sidebarWidth: 264,
   searchOpen: false,
   settingsOpen: false,
@@ -266,10 +261,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setLocale: (locale) => {
     localStorage.setItem('ws_locale', locale);
     set({ locale });
-  },
-  setGlassMode: (glassMode) => {
-    localStorage.setItem('ws_glass', glassMode ? 'true' : 'false');
-    set({ glassMode });
   },
   setSidebarWidth: (sidebarWidth) => set({ sidebarWidth: Math.max(220, Math.min(360, sidebarWidth)) }),
   setSearchOpen: (searchOpen) => set({ searchOpen }),

@@ -65,8 +65,6 @@ export function LoginPage() {
   const setLocale = useAppStore((s) => s.setLocale);
   const theme = useAppStore((s) => s.theme);
   const setTheme = useAppStore((s) => s.setTheme);
-  const glassMode = useAppStore((s) => s.glassMode);
-  const setGlassMode = useAppStore((s) => s.setGlassMode);
 
   const isFa = locale === 'fa';
   const info = useServerInfo();
@@ -136,8 +134,8 @@ export function LoginPage() {
       {/* Top Controls Bar */}
       <header className="relative z-10 w-full max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-[240px] flex-1">
-          <div className="w-11 h-11 rounded-2xl ios-glass-card border border-red-200/80 dark:border-red-900/50 p-1.5 flex items-center justify-center shrink-0">
-            <img src="/assets/esfahan-chalak-logo.png" alt="اصفهان چالاک" className="w-full h-full object-contain" />
+          <div className="brand-tile w-14 h-14 rounded-2xl p-2 flex items-center justify-center shrink-0">
+            <img src="/assets/esfahan-chalak-logo.png" alt="اصفهان چالاک" className="max-w-full max-h-full object-contain" />
           </div>
           <div className="min-w-0">
             <h1 className="font-display font-bold text-base sm:text-lg text-neutral-900 dark:text-white">
@@ -150,14 +148,6 @@ export function LoginPage() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setGlassMode(!glassMode)}
-            className="px-3 py-1.5 rounded-xl ios-glass-card border border-neutral-200/80 dark:border-neutral-700/80 text-xs font-medium text-neutral-700 dark:text-neutral-200 hover:border-red-400 flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-red-600" />
-            <span>{isFa ? (glassMode ? 'شیشه‌ای iOS' : 'حالت ساده') : glassMode ? 'iOS Glass' : 'Flat'}</span>
-          </button>
           <button
             type="button"
             onClick={() => setLocale(locale === 'fa' ? 'en' : 'fa')}

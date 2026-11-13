@@ -77,8 +77,6 @@ function WorkstreamShell() {
   const setTheme = useAppStore((s) => s.setTheme);
   const locale = useAppStore((s) => s.locale);
   const setLocale = useAppStore((s) => s.setLocale);
-  const glassMode = useAppStore((s) => s.glassMode);
-  const setGlassMode = useAppStore((s) => s.setGlassMode);
   const setSearchOpen = useAppStore((s) => s.setSearchOpen);
   const setShortcutsOpen = useAppStore((s) => s.setShortcutsOpen);
   const dismissedBroadcastIds = useAppStore((s) => s.dismissedBroadcastIds);
@@ -100,16 +98,14 @@ function WorkstreamShell() {
 
   const isFa = locale === 'fa';
 
-  // Sync theme, glass-enabled, and RTL direction on <html>
+  // Sync theme and RTL direction on <html>
   useEffect(() => {
     const root = document.documentElement;
     if (theme === 'dark') root.classList.add('dark');
     else root.classList.remove('dark');
-    if (glassMode) root.classList.add('glass-enabled');
-    else root.classList.remove('glass-enabled');
     root.dir = locale === 'fa' ? 'rtl' : 'ltr';
     root.lang = locale;
-  }, [theme, locale, glassMode]);
+  }, [theme, locale]);
 
   const [meTry, setMeTry] = useState(0);
   // Verify persisted session token, or auto-login only when ?autostart=1 is explicitly provided
@@ -402,18 +398,6 @@ function WorkstreamShell() {
                 : 'Switch to Dark Mode',
           icon: theme === 'dark' ? Sun : Moon,
           onSelect: () => setTheme(theme === 'dark' ? 'light' : 'dark'),
-        },
-        {
-          id: 'ctx-glass',
-          label: glassMode
-            ? isFa
-              ? 'حالت شیشه‌ای iOS (فعال)'
-              : 'iOS Liquid Glass (On)'
-            : isFa
-              ? 'فعال‌سازی حالت شیشه‌ای iOS'
-              : 'Enable iOS Liquid Glass',
-          icon: Sparkles,
-          onSelect: () => setGlassMode(!glassMode),
         },
         {
           id: 'ctx-shortcuts',

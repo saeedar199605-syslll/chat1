@@ -18,7 +18,6 @@ import {
   Plus,
   Settings,
   ShieldCheck,
-  Sparkles,
   Sun,
   Users,
   Wrench,
@@ -49,8 +48,6 @@ export function SlimRail({
   const setTheme = useAppStore((s) => s.setTheme);
   const locale = useAppStore((s) => s.locale);
   const setLocale = useAppStore((s) => s.setLocale);
-  const glassMode = useAppStore((s) => s.glassMode);
-  const setGlassMode = useAppStore((s) => s.setGlassMode);
   const currentUser = useAppStore((s) => s.currentUser);
   const clearAuth = useAppStore((s) => s.clearAuth);
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
@@ -127,10 +124,15 @@ export function SlimRail({
   return (
     <nav
       aria-label={isFa ? 'منوی اصلی فضای کاری' : 'Primary workspace navigation'}
-      className="relative w-16 shrink-0 h-full bg-white dark:bg-neutral-900 ios-glass border-e border-neutral-200/80 dark:border-neutral-800 flex flex-col items-center justify-between py-3 z-30"
+      className="ember-dock relative w-[76px] shrink-0 h-full flex flex-col items-center justify-between py-3.5 z-30"
     >
+      {/* Drifting ember glow behind the icons */}
+      <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <span className="ember-orb absolute -bottom-10 start-1/2 -translate-x-1/2 w-40 h-40 rounded-full bg-red-500/40 blur-3xl" />
+      </span>
+
       {/* Top Workspace Switcher + Primary Views */}
-      <div className="flex flex-col items-center gap-2.5 w-full px-2 min-h-0 flex-1">
+      <div className="relative flex flex-col items-center gap-2.5 w-full px-3 min-h-0 flex-1">
         <div className="relative shrink-0">
           <motion.button
             ref={wsBtnRef}
@@ -146,12 +148,12 @@ export function SlimRail({
               'مدیریت فضاهای کاری، نام و نشان شرکت',
               'Manage companies, workspace names & logos'
             )}
-            className="w-11 h-11 rounded-xl bg-white dark:bg-neutral-800 border border-red-200 dark:border-red-900/60 p-1 flex items-center justify-center shadow-xs hover:border-red-500 transition-colors overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 cursor-pointer"
+            className="brand-tile w-12 h-12 rounded-2xl p-1.5 flex items-center justify-center overflow-hidden transition-shadow hover:shadow-[0_0_0_2px_rgba(248,113,113,0.9),0_8px_22px_-6px_rgba(239,68,68,0.7)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 cursor-pointer"
           >
             {activeWs?.logoUrl ? (
-              <img src={activeWs.logoUrl} alt={activeWs.name} className="w-full h-full object-contain" />
+              <img src={activeWs.logoUrl} alt={activeWs.name} className="max-w-full max-h-full object-contain" />
             ) : activeWs?.id === 'ws_acme' || !activeWs ? (
-              <img src="/assets/esfahan-chalak-logo.png" alt="اصفهان چالاک" className="w-full h-full object-contain" />
+              <img src="/assets/esfahan-chalak-logo.png" alt="اصفهان چالاک" className="max-w-full max-h-full object-contain" />
             ) : (
               <span className="w-full h-full rounded-lg bg-red-600 text-white text-xs font-bold flex items-center justify-center">
                 {activeWs.logoText}
@@ -280,38 +282,44 @@ export function SlimRail({
             )}
         </div>
 
-        <div className="w-6 h-px bg-neutral-200/80 dark:bg-neutral-800 shrink-0" />
+        <div className="w-7 h-px bg-gradient-to-r from-transparent via-red-400/60 to-transparent shrink-0" />
 
-        <div className="flex flex-col items-center gap-1.5 w-full overflow-y-auto py-0.5 flex-1">
+        <div className="flex flex-col items-center gap-1 self-stretch -mx-3 px-3 overflow-y-auto py-1 flex-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = railTab === item.id;
             return (
               <motion.button
                 key={item.id}
-                whileHover={{ scale: 1.08 }}
+                whileHover={{ scale: 1.07 }}
                 whileTap={{ scale: 0.92 }}
                 type="button"
                 data-testid={`rail-tab-${item.id}`}
                 onClick={() => setRailTab(item.id)}
                 aria-label={item.label}
-                title={item.label}
-                className={`relative w-10 h-9 shrink-0 rounded-xl flex flex-col items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 cursor-pointer ${
-                  active
-                    ? 'text-white'
-                    : 'text-neutral-500 dark:text-neutral-400 hover:bg-red-50/70 dark:hover:bg-neutral-800 hover:text-red-600 dark:hover:text-red-400'
+                aria-current={active ? 'page' : undefined}
+                {...tipProps(item.label, item.label)}
+                className={`group relative w-12 h-10 shrink-0 rounded-2xl flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 cursor-pointer ${
+                  active ? 'text-white' : 'text-white/55 hover:text-white hover:bg-white/10'
                 }`}
               >
                 {active && (
-                  <motion.span
-                    layoutId="slimrail-active-pill"
-                    transition={{ type: 'spring', stiffness: 460, damping: 32 }}
-                    className="absolute inset-0 rounded-xl ios-glass-selected"
-                  />
+                  <>
+                    <motion.span
+                      layoutId="slimrail-active-pill"
+                      transition={{ type: 'spring', stiffness: 460, damping: 32 }}
+                      className="absolute inset-0 rounded-2xl ios-glass-selected"
+                    />
+                    {/* comet edge on the inner side of the rail */}
+                    <span
+                      aria-hidden
+                      className="absolute -end-3 top-1/2 -translate-y-1/2 h-6 w-1 rounded-s-full bg-gradient-to-b from-red-300 to-red-500 shadow-[0_0_14px_3px_rgba(248,113,113,0.85)]"
+                    />
+                  </>
                 )}
-                <Icon className="relative z-10 w-[18px] h-[18px]" />
+                <Icon className="relative z-10 w-5 h-5" strokeWidth={active ? 2.3 : 1.9} />
                 {item.badge !== undefined && (
-                  <span className="absolute -top-0.5 -end-0.5 z-20 min-w-[16px] h-[16px] px-1 rounded-full bg-red-600 ring-2 ring-white dark:ring-neutral-900 text-white text-[10px] font-semibold tabular-nums flex items-center justify-center">
+                  <span className="ember-pulse absolute -top-1 -end-1 z-20 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 ring-2 ring-[#160a0d] text-white text-[10px] font-bold tabular-nums flex items-center justify-center">
                     {item.badge > 9 ? '9+' : item.badge}
                   </span>
                 )}
@@ -322,7 +330,7 @@ export function SlimRail({
       </div>
 
       {/* Bottom Controls: Daily Tools, Glass Mode, RTL Locale, Theme, Settings, Profile & Sign Out */}
-      <div className="flex flex-col items-center gap-1 w-full px-2 pt-2 border-t border-neutral-100 dark:border-neutral-800 shrink-0">
+      <div className="relative flex flex-col items-center gap-0.5 w-full px-3 pt-2 shrink-0">
         <motion.button
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
@@ -336,32 +344,13 @@ export function SlimRail({
             'تبدیل PDF به Word و عکس، تقویم شمسی و ماشین‌حساب',
             'PDF → Word/PNG, Jalali calendar, VAT calc & notes'
           )}
-          className={`w-10 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+          className={`w-11 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
             dailyToolsOpen
               ? 'ios-glass-selected'
-              : 'text-red-600 dark:text-red-400 bg-red-50/70 dark:bg-red-950/35 hover:bg-red-100/80'
+              : 'text-red-300 bg-red-500/15 ring-1 ring-red-400/25 hover:bg-red-500/30 hover:text-white'
           }`}
         >
-          <Wrench className="w-3.5 h-3.5" />
-        </motion.button>
-
-        <motion.button
-          whileHover={{ scale: 1.07 }}
-          whileTap={{ scale: 0.92 }}
-          type="button"
-          onClick={() => setGlassMode(!glassMode)}
-          aria-label={isFa ? 'تغییر حالت شیشه‌ای iOS' : 'Toggle iOS Liquid Glass'}
-          {...tipProps(
-            glassMode ? 'حالت شیشه‌ای iOS 27 فعال است' : 'فعال‌سازی حالت شیشه‌ای iOS 27',
-            glassMode ? 'iOS 27 Liquid Glass Active' : 'Enable iOS 27 Liquid Glass'
-          )}
-          className={`w-10 h-7.5 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
-            glassMode
-              ? 'text-red-600 dark:text-red-400 ios-glass-selected-soft'
-              : 'text-neutral-500 dark:text-neutral-400 hover:bg-red-50 dark:hover:bg-neutral-800'
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5" />
+          <Wrench className="w-4 h-4" />
         </motion.button>
 
         <button
@@ -369,7 +358,7 @@ export function SlimRail({
           onClick={() => setLocale(locale === 'en' ? 'fa' : 'en')}
           aria-label={isFa ? 'تغییر زبان' : 'Toggle language and RTL layout'}
           {...tipProps('تغییر زبان برنامه (فارسی / انگلیسی)', 'Switch Language (FA RTL / EN LTR)')}
-          className="w-10 h-7.5 rounded-xl text-neutral-500 dark:text-neutral-400 hover:bg-red-50 dark:hover:bg-neutral-800 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center transition-colors text-[10px] font-mono font-semibold cursor-pointer"
+          className="w-11 h-7 rounded-xl text-white/55 hover:bg-white/10 hover:text-white flex items-center justify-center transition-colors text-[10px] font-mono font-semibold cursor-pointer"
         >
           <Languages className="w-3.5 h-3.5 me-0.5" />
           <span>{locale.toUpperCase()}</span>
@@ -380,7 +369,7 @@ export function SlimRail({
           onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
           aria-label={theme === 'light' ? (isFa ? 'حالت شب' : 'Switch to dark mode') : isFa ? 'حالت روز' : 'Switch to light mode'}
           {...tipProps('تغییر تم روشن (سفید و قرمز) / تاریک', 'Toggle Light (White & Red) / Dark Theme')}
-          className="w-10 h-7.5 rounded-xl text-neutral-500 dark:text-neutral-400 hover:bg-red-50 dark:hover:bg-neutral-800 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center transition-colors cursor-pointer"
+          className="w-11 h-7 rounded-xl text-white/55 hover:bg-white/10 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
         >
           {theme === 'light' ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
         </button>
@@ -394,7 +383,7 @@ export function SlimRail({
             'تنظیمات پروفایل، واحد سازمانی و نحوه عضویت در گروه',
             'Profile, Department & Group Invite Policy'
           )}
-          className="w-10 h-7.5 rounded-xl text-neutral-500 dark:text-neutral-400 hover:bg-red-50 dark:hover:bg-neutral-800 hover:text-red-600 dark:hover:text-red-400 flex items-center justify-center transition-colors cursor-pointer"
+          className="w-11 h-7 rounded-xl text-white/55 hover:bg-white/10 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
         >
           <Settings className="w-3.5 h-3.5" />
         </button>
@@ -405,7 +394,7 @@ export function SlimRail({
           onClick={() => clearAuth()}
           aria-label={isFa ? 'خروج از حساب کاربری' : 'Sign out'}
           {...tipProps('خروج امن از حساب کاربری', 'Sign Out to Login Screen')}
-          className="w-10 h-7.5 rounded-xl text-neutral-500 dark:text-neutral-400 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 flex items-center justify-center transition-colors cursor-pointer"
+          className="w-11 h-7 rounded-xl text-white/55 hover:bg-red-500/25 hover:text-red-200 flex items-center justify-center transition-colors cursor-pointer"
         >
           <LogOut className="w-3.5 h-3.5" />
         </button>
@@ -416,7 +405,7 @@ export function SlimRail({
             onClick={() => setSettingsOpen(true)}
             aria-label={`${currentUser.displayName}`}
             {...tipProps(`${currentUser.displayName} — ${currentUser.department}`, `${currentUser.displayName} (${currentUser.role})`)}
-            className="mt-0.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 cursor-pointer"
+            className="mt-1.5 rounded-full ring-2 ring-red-400/60 hover:ring-red-300 transition focus-visible:outline-none cursor-pointer"
           >
             <UserAvatar
               name={currentUser.displayName}

@@ -85,6 +85,7 @@ export function ContextSidebar({
   const groupChannels = visibleChannels.filter((c) => c.type === 'GROUP_DM');
   const dmChannels = visibleChannels.filter((c) => c.type === 'DM');
 
+  const onlineCount = directoryUsers.filter((u) => u.presence === 'ONLINE').length;
   const canCreate = canPerformWithMatrix(currentUser, 'channel:create', 'PUBLIC', rbacMatrix);
   const canDeleteChannel = canPerformWithMatrix(currentUser, 'channel:delete', 'PUBLIC', rbacMatrix);
   const canAssignTeamTask = canPerformWithMatrix(currentUser, 'task:assign_team', 'PUBLIC', rbacMatrix);
@@ -258,72 +259,72 @@ export function ContextSidebar({
   return (
     <aside
       style={{ width: sidebarWidth }}
-      className="relative hidden md:flex flex-col shrink-0 h-full bg-white dark:bg-neutral-900/95 ios-glass border-e border-neutral-200/80 dark:border-neutral-800 select-none"
+      className="relative hidden md:flex flex-col shrink-0 h-full bg-white dark:bg-[#130c0e] border-e border-neutral-200 dark:border-white/5 select-none"
     >
-      {/* Workspace Header */}
-      <div className="h-14 px-3.5 flex items-center justify-between gap-2 border-b border-neutral-200/80 dark:border-neutral-800 shrink-0">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-white dark:bg-neutral-800 border border-red-100 dark:border-red-900/40 p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
-            {workspace?.logoUrl ? (
-              <img src={workspace.logoUrl} alt={workspace.name} className="w-full h-full object-contain" />
-            ) : workspace?.id === 'ws_acme' || !workspace ? (
-              <img src="/assets/esfahan-chalak-logo.png" alt="اصفهان چالاک" className="w-full h-full object-contain" />
-            ) : (
-              <span className="w-full h-full rounded bg-red-600 text-white text-xs font-bold flex items-center justify-center">
-                {workspace.logoText}
-              </span>
+      {/* Workspace hero */}
+      <div className="p-3 pb-2 shrink-0">
+        <div className="ember-hero relative overflow-hidden rounded-2xl p-3.5 text-white">
+          <span aria-hidden className="pointer-events-none absolute -top-10 -end-8 w-32 h-32 rounded-full bg-white/20 blur-2xl" />
+          <div className="relative flex items-center gap-3">
+            <div className="brand-tile w-12 h-12 rounded-2xl p-1.5 flex items-center justify-center shrink-0 overflow-hidden">
+              {workspace?.logoUrl ? (
+                <img src={workspace.logoUrl} alt={workspace.name} className="max-w-full max-h-full object-contain" />
+              ) : (
+                <img src="/assets/esfahan-chalak-logo.png" alt="اصفهان چالاک" className="max-w-full max-h-full object-contain" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 data-testid="sidebar-workspace-name" className="font-display font-bold text-[15px] leading-tight truncate">
+                {workspace?.name || (isFa ? 'شرکت اصفهان چالاک' : 'Esfahan Chalak Co.')}
+              </h2>
+              <p className="mt-1 text-[11px] text-white/80 truncate flex items-center gap-1.5">
+                <span className="ember-pulse w-1.5 h-1.5 rounded-full bg-emerald-300 shrink-0" />
+                <span className="tabular-nums">{onlineCount}</span>
+                <span>{isFa ? 'نفر آنلاین' : 'online'}</span>
+                {workspace?.domain && <span className="truncate opacity-80">· {workspace.domain}</span>}
+              </p>
+            </div>
+          </div>
+          <div className="relative mt-3 flex items-center gap-1.5">
+            {canCreate && (
+              <button
+                type="button"
+                data-testid="sidebar-create-channel-btn"
+                onClick={() => setCreateChannelOpen(true, 'channel')}
+                aria-label={isFa ? 'ایجاد کانال یا گروه جدید' : 'Create new channel or group'}
+                {...tipProps('ایجاد کانال یا گروه کاری جدید', 'Create New Channel or Work Group')}
+                className="flex-1 h-8 rounded-xl bg-white text-red-700 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-red-50 active:scale-[0.98] transition shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" strokeWidth={2.6} />
+                <span>{isFa ? 'کانال جدید' : 'New channel'}</span>
+              </button>
+            )}
+            {workspace && onEditWorkspace && (currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'DEPT_MANAGER') && (
+              <button
+                type="button"
+                onClick={() => onEditWorkspace(workspace)}
+                aria-label={isFa ? 'ویرایش نام و لوگوی شرکت' : 'Edit workspace branding'}
+                {...tipProps('ویرایش نام و لوگوی شرکت', 'Edit Company Name & Logo')}
+                className="w-8 h-8 rounded-xl bg-white/15 hover:bg-white/25 ring-1 ring-white/25 flex items-center justify-center transition"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+              </button>
             )}
           </div>
-          <div className="min-w-0">
-            <h2
-              data-testid="sidebar-workspace-name"
-              className="font-display font-semibold text-sm text-neutral-900 dark:text-neutral-100 truncate"
-            >
-              {workspace?.name || (isFa ? 'شرکت اصفهان چالاک' : 'Esfahan Chalak Co.')}
-            </h2>
-            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
-              {workspace?.domain || 'esfahan-chalak.ir'}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {workspace && onEditWorkspace && (currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'DEPT_MANAGER') && (
-            <button
-              type="button"
-              onClick={() => onEditWorkspace(workspace)}
-              aria-label={isFa ? 'ویرایش نام و لوگوی شرکت' : 'Edit workspace branding'}
-              {...tipProps('ویرایش نام و لوگوی شرکت', 'Edit Company Name & Logo')}
-              className="w-7 h-7 rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-500 dark:text-neutral-300 hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:hover:bg-neutral-800 flex items-center justify-center transition-colors"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {canCreate && (
-            <button
-              type="button"
-              data-testid="sidebar-create-channel-btn"
-              onClick={() => setCreateChannelOpen(true, 'channel')}
-              aria-label={isFa ? 'ایجاد کانال یا گروه جدید' : 'Create new channel or group'}
-              {...tipProps('ایجاد کانال یا گروه کاری جدید', 'Create New Channel or Work Group')}
-              className="w-7 h-7 rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:hover:bg-neutral-800 flex items-center justify-center transition-colors shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
       </div>
 
       {/* Quick Channel Filter */}
-      <div className="p-3 shrink-0">
+      <div className="px-3 pb-2 pt-1 shrink-0">
         <div className="relative">
-          <Search className="w-3.5 h-3.5 text-neutral-400 absolute start-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-neutral-400 absolute start-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
-            placeholder={isFa ? 'فیلتر کانال‌ها و گفتگوها...' : 'Filter channels & DMs'}
+            placeholder={isFa ? 'جستجو در کانال‌ها و گفتگوها...' : 'Search channels & DMs'}
             aria-label="Filter channels and direct messages"
-            className="w-full ps-8 pe-3 py-1.5 text-xs rounded-lg bg-neutral-100/80 dark:bg-neutral-800/80 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 border border-transparent focus:border-red-500 focus:bg-white dark:focus:bg-neutral-900 focus:outline-none transition-colors"
+            className="w-full ps-9 pe-3 py-2 text-xs rounded-xl bg-neutral-100 dark:bg-white/5 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 ring-1 ring-transparent focus:ring-red-500/60 focus:bg-white dark:focus:bg-white/10 focus:outline-none transition"
           />
         </div>
       </div>
@@ -336,7 +337,7 @@ export function ContextSidebar({
             <button
               type="button"
               onClick={() => setStarredOpen((v) => !v)}
-              className="w-full flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200"
+              className="w-full flex items-center gap-1.5 px-2 py-1 text-[11px] font-bold text-neutral-400 dark:text-neutral-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
             >
               {starredOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               <Star className="w-3 h-3 text-red-500" />
@@ -352,10 +353,10 @@ export function ContextSidebar({
                       type="button"
                       onClick={() => setActiveChannelId(ch.id)}
                       onContextMenu={(e) => openChannelContext(e, ch)}
-                      className={`relative w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl text-xs transition-all cursor-pointer ${
+                      className={`relative w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-[13px] transition-all cursor-pointer ${
                         active
                           ? 'ios-glass-selected font-semibold'
-                          : 'text-neutral-700 dark:text-neutral-300 hover:bg-red-50/70 dark:hover:bg-neutral-800/70'
+                          : 'text-neutral-700 dark:text-neutral-300 hover:bg-red-50 dark:hover:bg-white/5'
                       }`}
                     >
                       <span className="flex items-center gap-2 min-w-0 truncate">
@@ -363,7 +364,7 @@ export function ContextSidebar({
                         <span className="truncate">{ch.name}</span>
                       </span>
                       {ch.unreadCount > 0 && !active && (
-                        <span className="text-[11px] font-mono font-semibold text-red-600 dark:text-red-400 tabular-nums">
+                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold tabular-nums flex items-center justify-center shadow-[0_0_10px_rgba(220,38,38,0.55)]">
                           {ch.unreadCount}
                         </span>
                       )}
@@ -381,7 +382,7 @@ export function ContextSidebar({
             <button
               type="button"
               onClick={() => setChannelsOpen((v) => !v)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200"
+              className="flex items-center gap-1.5 text-[11px] font-bold text-neutral-400 dark:text-neutral-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
             >
               {channelsOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               <span>{isFa ? 'کانال‌های سازمانی' : 'Channels'}</span>
@@ -411,10 +412,10 @@ export function ContextSidebar({
                     data-testid={`sidebar-channel-${ch.id}`}
                     onClick={() => setActiveChannelId(ch.id)}
                     onContextMenu={(e) => openChannelContext(e, ch)}
-                    className={`relative w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl text-xs transition-all cursor-pointer ${
+                    className={`relative w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-[13px] transition-all cursor-pointer ${
                       active
                         ? 'text-white font-semibold'
-                        : 'text-neutral-700 dark:text-neutral-300 hover:bg-red-50/70 dark:hover:bg-neutral-800/70'
+                        : 'text-neutral-700 dark:text-neutral-300 hover:bg-red-50 dark:hover:bg-white/5'
                     }`}
                   >
                     {active && (
@@ -436,7 +437,7 @@ export function ContextSidebar({
                         />
                       )}
                       {ch.unreadCount > 0 && !active && (
-                        <span className="text-[11px] font-mono font-semibold text-red-600 dark:text-red-400 tabular-nums">
+                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold tabular-nums flex items-center justify-center shadow-[0_0_10px_rgba(220,38,38,0.55)]">
                           {ch.unreadCount}
                         </span>
                       )}
@@ -454,7 +455,7 @@ export function ContextSidebar({
             <button
               type="button"
               onClick={() => setGroupsOpen((v) => !v)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200"
+              className="flex items-center gap-1.5 text-[11px] font-bold text-neutral-400 dark:text-neutral-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
             >
               {groupsOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               <span>{isFa ? 'گروه‌های کاری' : 'Work Groups'}</span>
@@ -492,10 +493,10 @@ export function ContextSidebar({
                       data-testid={`sidebar-channel-${ch.id}`}
                       onClick={() => setActiveChannelId(ch.id)}
                       onContextMenu={(e) => openChannelContext(e, ch)}
-                      className={`relative w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl text-xs transition-all cursor-pointer ${
+                      className={`relative w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-[13px] transition-all cursor-pointer ${
                         active
                           ? 'text-white font-semibold'
-                          : 'text-neutral-700 dark:text-neutral-300 hover:bg-red-50/70 dark:hover:bg-neutral-800/70'
+                          : 'text-neutral-700 dark:text-neutral-300 hover:bg-red-50 dark:hover:bg-white/5'
                       }`}
                     >
                       {active && (
@@ -526,7 +527,7 @@ export function ContextSidebar({
             <button
               type="button"
               onClick={() => setDmsOpen((v) => !v)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200"
+              className="flex items-center gap-1.5 text-[11px] font-bold text-neutral-400 dark:text-neutral-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
             >
               {dmsOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               <span>{isFa ? 'پیام‌های مستقیم' : 'Direct Messages'}</span>
@@ -577,10 +578,10 @@ export function ContextSidebar({
                     type="button"
                     onClick={() => setActiveChannelId(ch.id)}
                     onContextMenu={(e) => openDmContext(e, ch)}
-                    className={`relative w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl text-xs transition-all cursor-pointer ${
+                    className={`relative w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-[13px] transition-all cursor-pointer ${
                       active
                         ? 'text-white font-semibold'
-                        : 'text-neutral-700 dark:text-neutral-300 hover:bg-red-50/70 dark:hover:bg-neutral-800/70'
+                        : 'text-neutral-700 dark:text-neutral-300 hover:bg-red-50 dark:hover:bg-white/5'
                     }`}
                   >
                     {active && (
@@ -601,7 +602,7 @@ export function ContextSidebar({
                       <span className="truncate">{peer?.displayName || ch.name}</span>
                     </span>
                     {ch.unreadCount > 0 && !active && (
-                      <span className="relative z-10 text-[11px] font-mono font-semibold text-red-600 dark:text-red-400 tabular-nums">
+                      <span className="relative z-10 min-w-[20px] h-5 px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold tabular-nums flex items-center justify-center shadow-[0_0_10px_rgba(220,38,38,0.55)]">
                         {ch.unreadCount}
                       </span>
                     )}
