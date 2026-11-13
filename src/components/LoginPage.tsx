@@ -326,7 +326,7 @@ export function LoginPage() {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    minLength={6}
+                    minLength={8}
                     data-testid="login-password-input"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

@@ -37,6 +37,7 @@ export function useSocket() {
     });
 
     let channelsTimer: ReturnType<typeof setTimeout> | null = null;
+    let auditTimer: ReturnType<typeof setTimeout> | null = null;
     sharedSocket = socket;
     socketRef.current = socket;
 
@@ -212,9 +213,14 @@ export function useSocket() {
       queryClient.invalidateQueries({ queryKey: ['admin-broadcasts'] });
     });
 
+    // Every action by any user emits one: coalesce so an open admin panel refetches at most every 5s.
     socket.on('audit:new', () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-audit-logs'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-overview'] });
+      if (auditTimer) return;
+      auditTimer = setTimeout(() => {
+        auditTimer = null;
+        queryClient.invalidateQueries({ queryKey: ['admin-audit-logs'] });
+        queryClient.invalidateQueries({ queryKey: ['admin-overview'] });
+      }, 5000);
     });
 
     socket.on('huddles:snapshot', (snapshot) => {
@@ -223,6 +229,7 @@ export function useSocket() {
 
     return () => {
       if (channelsTimer) clearTimeout(channelsTimer);
+      if (auditTimer) clearTimeout(auditTimer);
       socket.disconnect();
       if (sharedSocket === socket) sharedSocket = null;
     };
