@@ -439,9 +439,9 @@ export function LoginPage() {
                 )}
               </div>
 
-              <h2 className="relative font-display font-extrabold text-2xl mb-1.5">
-                {mode === 'login' ? (isFa ? 'خوش برگشتی 👋' : 'Welcome back 👋') : isFa ? 'یک حساب بساز' : 'Create your account'}
-              </h2>
+              {mode === 'register' && (
+                <h2 className="relative font-display font-extrabold text-2xl mb-1.5">{isFa ? 'یک حساب بساز' : 'Create your account'}</h2>
+              )}
               <p className="relative text-xs sm:text-sm text-white/50 mb-6">
                 {mode === 'login'
                   ? isFa
