@@ -36,6 +36,17 @@ export function useSocket() {
       reconnectionDelayMax: 4000,
     });
 
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    const coalesce = (key: string, fn: () => void, ms = 700) => {
+      if (timers.has(key)) return;
+      timers.set(
+        key,
+        setTimeout(() => {
+          timers.delete(key);
+          fn();
+        }, ms)
+      );
+    };
     let channelsTimer: ReturnType<typeof setTimeout> | null = null;
     let auditTimer: ReturnType<typeof setTimeout> | null = null;
     sharedSocket = socket;
@@ -128,15 +139,20 @@ export function useSocket() {
       queryClient.invalidateQueries({ queryKey: ['archive'] });
     });
 
+    // A task change fires both events (plus the editor's own refetch): coalesce into one round of refetches.
     socket.on('task:updated', ({ channelId }: { channelId: string; task?: TaskItem }) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', channelId] });
-      queryClient.invalidateQueries({ queryKey: ['all-tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['archive'] });
+      coalesce('tasks', () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks', channelId] });
+        queryClient.invalidateQueries({ queryKey: ['all-tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['archive'] });
+      });
     });
 
     socket.on('tasks:changed', () => {
-      queryClient.invalidateQueries({ queryKey: ['all-tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['archive'] });
+      coalesce('tasks', () => {
+        queryClient.invalidateQueries({ queryKey: ['all-tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['archive'] });
+      });
     });
 
     socket.on('wiki:updated', (wiki: WikiDoc) => {
@@ -193,11 +209,11 @@ export function useSocket() {
     });
 
     socket.on('approvals:updated', () => {
-      queryClient.invalidateQueries({ queryKey: ['approvals'] });
+      coalesce('approvals', () => queryClient.invalidateQueries({ queryKey: ['approvals'] }));
     });
 
     socket.on('standups:updated', () => {
-      queryClient.invalidateQueries({ queryKey: ['standups'] });
+      coalesce('standups', () => queryClient.invalidateQueries({ queryKey: ['standups'] }));
     });
 
     socket.on('backup:restored', () => {
@@ -230,6 +246,7 @@ export function useSocket() {
     return () => {
       if (channelsTimer) clearTimeout(channelsTimer);
       if (auditTimer) clearTimeout(auditTimer);
+      timers.forEach(clearTimeout);
       socket.disconnect();
       if (sharedSocket === socket) sharedSocket = null;
     };

@@ -205,8 +205,8 @@
 
 .login-grid {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    linear-gradient(rgba(127, 29, 29, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(127, 29, 29, 0.06) 1px, transparent 1px);
   background-size: 52px 52px;
   mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%);
   -webkit-mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%);
@@ -242,3 +242,10 @@
 }
 .login-shine { animation: loginShine 3.2s ease-in-out infinite; }
 [dir="rtl"] .login-shine { animation-direction: reverse; }
+
+.dark .login-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+}
+.login-card .login-border { box-shadow: 0 30px 70px -24px rgba(220, 38, 38, 0.35); }

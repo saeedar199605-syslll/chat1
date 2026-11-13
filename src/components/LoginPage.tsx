@@ -8,6 +8,8 @@ import {
   KeyRound,
   Languages,
   Loader2,
+  Moon,
+  Sun,
   Lock,
   Mail,
   ShieldCheck,
@@ -32,7 +34,7 @@ const DEMO_PERSONAS = [
 const faDigits = (v: number | string) => String(v).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 
 /** Embers that rise, drift, flee the cursor and burst on click. Pauses when the tab is hidden. */
-function EmberField() {
+function EmberField({ dark }: { dark: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -75,7 +77,7 @@ function EmberField() {
       raf = requestAnimationFrame(frame);
       if (document.hidden) return;
       ctx.clearRect(0, 0, w, h);
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = dark ? 'lighter' : 'source-over';
       for (let i = 0; i < ps.length; i++) {
         const p = ps[i];
         const dx = p.x - mouse.x;
@@ -99,9 +101,11 @@ function EmberField() {
           continue;
         }
         const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 7);
-        g.addColorStop(0, `hsla(${p.hue},100%,62%,${a * 0.85})`);
-        g.addColorStop(0.35, `hsla(${p.hue},100%,50%,${a * 0.28})`);
-        g.addColorStop(1, `hsla(${p.hue},100%,45%,0)`);
+        const l = dark ? 62 : 48;
+        const k = dark ? 1 : 0.7;
+        g.addColorStop(0, `hsla(${p.hue},100%,${l}%,${a * 0.85 * k})`);
+        g.addColorStop(0.35, `hsla(${p.hue},100%,${l - 12}%,${a * 0.28 * k})`);
+        g.addColorStop(1, `hsla(${p.hue},100%,${l - 17}%,0)`);
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r * 7, 0, Math.PI * 2);
@@ -142,7 +146,7 @@ function EmberField() {
       window.removeEventListener('pointerleave', onLeave);
       window.removeEventListener('click', onClick);
     };
-  }, []);
+  }, [dark]);
 
   return <canvas ref={ref} aria-hidden className="pointer-events-none fixed inset-0 z-0" />;
 }
@@ -172,7 +176,7 @@ function Field(props: {
 }) {
   return (
     <div className="relative group">
-      <span className="absolute start-4 top-1/2 -translate-y-1/2 text-white/35 group-focus-within:text-red-400 transition-colors">
+      <span className="absolute start-4 top-1/2 -translate-y-1/2 text-neutral-400 dark:text-white/35 group-focus-within:text-red-500 dark:group-focus-within:text-red-400 transition-colors">
         {props.icon}
       </span>
       <input
@@ -186,11 +190,11 @@ function Field(props: {
         minLength={props.minLength}
         required={props.required ?? true}
         dir={props.dir}
-        className="peer w-full h-14 ps-11 pe-12 pt-5 rounded-2xl bg-white/[0.045] text-white text-sm ring-1 ring-white/10 hover:ring-white/20 focus:ring-2 focus:ring-red-500/80 focus:bg-white/[0.07] outline-none transition placeholder-transparent"
+        className="peer w-full h-14 ps-11 pe-12 pt-5 rounded-2xl bg-neutral-50 text-neutral-900 dark:bg-white/[0.045] dark:text-white text-sm ring-1 ring-black/10 dark:ring-white/10 hover:ring-black/20 dark:hover:ring-white/20 focus:ring-2 focus:ring-red-500/80 focus:bg-white dark:focus:bg-white/[0.07] outline-none transition placeholder-transparent"
       />
       <label
         htmlFor={props.id}
-        className="pointer-events-none absolute start-11 top-2 text-[11px] font-medium text-white/45 transition-all peer-placeholder-shown:top-[18px] peer-placeholder-shown:text-sm peer-focus:top-2 peer-focus:text-[11px] peer-focus:text-red-300"
+        className="pointer-events-none absolute start-11 top-2 text-[11px] font-medium text-neutral-500 dark:text-white/45 transition-all peer-placeholder-shown:top-[18px] peer-placeholder-shown:text-sm peer-focus:top-2 peer-focus:text-[11px] peer-focus:text-red-600 dark:peer-focus:text-red-300"
       >
         {props.label}
       </label>
@@ -204,6 +208,8 @@ export function LoginPage() {
   const showToast = useAppStore((s) => s.showToast);
   const locale = useAppStore((s) => s.locale);
   const setLocale = useAppStore((s) => s.setLocale);
+  const theme = useAppStore((s) => s.theme);
+  const setTheme = useAppStore((s) => s.setTheme);
 
   const isFa = locale === 'fa';
   const info = useServerInfo();
@@ -305,31 +311,43 @@ export function LoginPage() {
   return (
     <div
       data-testid="login-page"
-      className="relative min-h-screen w-full overflow-x-hidden overflow-y-auto bg-[#080406] text-white"
+      className="relative min-h-screen w-full overflow-x-hidden overflow-y-auto bg-[#fff6f6] text-neutral-900 dark:bg-[#080406] dark:text-white"
     >
       {/* Atmosphere */}
       <div aria-hidden className="pointer-events-none fixed inset-0">
-        <div className="login-aurora absolute -top-1/3 -start-1/4 w-[70vw] h-[70vw] rounded-full bg-[radial-gradient(circle,rgba(239,68,68,0.5),transparent_62%)] blur-2xl" />
-        <div className="login-aurora-slow absolute -bottom-1/3 -end-1/4 w-[65vw] h-[65vw] rounded-full bg-[radial-gradient(circle,rgba(190,18,60,0.55),transparent_62%)] blur-2xl" />
+        <div className="login-aurora absolute -top-1/3 -start-1/4 w-[70vw] h-[70vw] rounded-full bg-[radial-gradient(circle,rgba(239,68,68,0.5),transparent_62%)] opacity-50 dark:opacity-100 blur-2xl" />
+        <div className="login-aurora-slow absolute -bottom-1/3 -end-1/4 w-[65vw] h-[65vw] rounded-full bg-[radial-gradient(circle,rgba(190,18,60,0.55),transparent_62%)] opacity-40 dark:opacity-100 blur-2xl" />
         <div className="absolute inset-0 login-grid" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(0,0,0,0.65)_100%)]" />
+        <div className="absolute inset-0 hidden dark:block bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(0,0,0,0.65)_100%)]" />
+        <div className="absolute inset-0 dark:hidden bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(255,255,255,0.85)_100%)]" />
       </div>
-      <EmberField />
+      <EmberField dark={theme === 'dark'} />
 
       {/* Top bar */}
       <header className="relative z-10 flex items-center justify-between px-5 sm:px-10 pt-5">
-        <div className="flex items-center gap-2 text-[11px] sm:text-xs text-white/55 tabular-nums">
+        <div className="flex items-center gap-2 text-[11px] sm:text-xs text-neutral-500 dark:text-white/55 tabular-nums">
           <span className="ember-pulse w-2 h-2 rounded-full bg-emerald-400" />
           <span>{clock}</span>
         </div>
-        <button
-          type="button"
-          onClick={() => setLocale(locale === 'fa' ? 'en' : 'fa')}
-          className="h-9 px-3.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 hover:bg-white/10 hover:ring-red-400/50 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
-        >
-          <Languages className="w-3.5 h-3.5 text-red-400" />
-          <span>{locale === 'fa' ? 'FA · English' : 'EN · فارسی'}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setLocale(locale === 'fa' ? 'en' : 'fa')}
+            className="h-9 px-3.5 rounded-full bg-white shadow-sm ring-1 ring-black/10 dark:bg-white/[0.06] dark:shadow-none dark:ring-white/10 hover:ring-red-400/60 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <Languages className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
+            <span>{locale === 'fa' ? 'FA · English' : 'EN · فارسی'}</span>
+          </button>
+          <button
+            type="button"
+            data-testid="login-theme-toggle"
+            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+            aria-label={theme === 'light' ? (isFa ? 'حالت شب' : 'Dark mode') : isFa ? 'حالت روز' : 'Light mode'}
+            className="h-9 w-9 rounded-full bg-white shadow-sm ring-1 ring-black/10 dark:bg-white/[0.06] dark:shadow-none dark:ring-white/10 hover:ring-red-400/60 flex items-center justify-center transition cursor-pointer"
+          >
+            {theme === 'light' ? <Moon className="w-4 h-4 text-red-500" /> : <Sun className="w-4 h-4 text-red-400" />}
+          </button>
+        </div>
       </header>
 
       <main className="relative z-10 mx-auto w-full max-w-6xl px-5 sm:px-10 py-8 lg:py-12 grid lg:grid-cols-[1.05fr_0.95fr] gap-10 lg:gap-16 items-center min-h-[calc(100vh-72px)]">
@@ -354,11 +372,11 @@ export function LoginPage() {
             </div>
           </div>
 
-          <p className="text-red-300/90 text-xs sm:text-sm font-semibold mb-3">
+          <p className="text-red-600 dark:text-red-300/90 text-xs sm:text-sm font-semibold mb-3">
             {isFa ? 'پلتفرم ارتباطات سازمانی اصفهان چالاک' : 'Esfahan Chalak Enterprise Suite'}
           </p>
           <h1 className="font-display font-extrabold text-4xl sm:text-5xl xl:text-6xl leading-[1.15]">
-            <span className="block text-white/95">{isFa ? 'کار تیمی با' : 'Teamwork with'}</span>
+            <span className="block text-neutral-900 dark:text-white/95">{isFa ? 'کار تیمی با' : 'Teamwork with'}</span>
             <span className="block h-[1.25em] relative overflow-hidden">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.span
@@ -367,14 +385,14 @@ export function LoginPage() {
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: '-90%', opacity: 0 }}
                   transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                  className="absolute inset-x-0 lg:inset-x-auto bg-gradient-to-r from-red-400 via-orange-300 to-red-500 bg-clip-text text-transparent"
+                  className="absolute inset-x-0 lg:inset-x-auto bg-gradient-to-r from-red-600 via-orange-500 to-red-700 dark:from-red-400 dark:via-orange-300 dark:to-red-500 bg-clip-text text-transparent"
                 >
                   {words[wordIdx]}
                 </motion.span>
               </AnimatePresence>
             </span>
           </h1>
-          <p className="mt-5 max-w-md text-sm sm:text-base text-white/60 leading-relaxed">
+          <p className="mt-5 max-w-md text-sm sm:text-base text-neutral-600 dark:text-white/60 leading-relaxed">
             {isFa
               ? 'گفتگو، وظایف، جلسه، تأییدیه و ممیزی امنیتی؛ همه در یک میزکار یکپارچه، سریع و امن.'
               : 'Chat, tasks, meetings, approvals and security audit in one fast, secure workspace.'}
@@ -384,10 +402,10 @@ export function LoginPage() {
             {features.map((f) => (
               <li
                 key={f.en}
-                className="flex items-center gap-2.5 rounded-2xl bg-white/[0.04] ring-1 ring-white/10 px-3.5 py-2.5 text-xs text-white/75"
+                className="flex items-center gap-2.5 rounded-2xl bg-white shadow-sm dark:shadow-none dark:bg-white/[0.04] ring-1 ring-black/5 dark:ring-white/10 px-3.5 py-2.5 text-xs text-neutral-700 dark:text-white/75"
               >
-                <span className="w-8 h-8 rounded-xl bg-red-500/15 ring-1 ring-red-400/25 flex items-center justify-center shrink-0">
-                  <f.icon className="w-4 h-4 text-red-300" />
+                <span className="w-8 h-8 rounded-xl bg-red-50 dark:bg-red-500/15 ring-1 ring-red-200 dark:ring-red-400/25 flex items-center justify-center shrink-0">
+                  <f.icon className="w-4 h-4 text-red-500 dark:text-red-300" />
                 </span>
                 <span>{isFa ? f.fa : f.en}</span>
               </li>
@@ -399,14 +417,14 @@ export function LoginPage() {
         <section className="w-full max-w-md mx-auto lg:mx-0 lg:justify-self-end" onPointerMove={onTilt} onPointerLeave={resetTilt}>
           <div ref={cardRef} className="login-card relative rounded-[2rem] p-[1.5px] transition-transform duration-200 ease-out will-change-transform">
             <span aria-hidden className="login-border absolute inset-0 rounded-[2rem]" />
-            <div className="relative rounded-[calc(2rem-1.5px)] bg-[#12090c]/95 p-6 sm:p-8 overflow-hidden">
+            <div className="relative rounded-[calc(2rem-1.5px)] bg-white dark:bg-[#12090c]/95 p-6 sm:p-8 overflow-hidden">
               <span
                 aria-hidden
                 className="pointer-events-none absolute inset-0 opacity-70"
-                style={{ background: 'radial-gradient(420px circle at var(--mx,50%) var(--my,0%), rgba(239,68,68,0.16), transparent 60%)' }}
+                style={{ background: 'radial-gradient(420px circle at var(--mx,50%) var(--my,0%), rgba(239,68,68,0.14), transparent 60%)' }}
               />
 
-              <div className="relative flex items-center gap-1 p-1 rounded-2xl bg-white/[0.05] ring-1 ring-white/10 mb-6">
+              <div className="relative flex items-center gap-1 p-1 rounded-2xl bg-neutral-100 dark:bg-white/[0.05] ring-1 ring-black/5 dark:ring-white/10 mb-6">
                 <button
                   type="button"
                   data-testid="login-mode-signin"
@@ -415,7 +433,7 @@ export function LoginPage() {
                     setErrorMsg(null);
                   }}
                   className={`flex-1 h-10 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                    mode === 'login' ? 'ios-glass-selected' : 'text-white/55 hover:text-white'
+                    mode === 'login' ? 'ios-glass-selected' : 'text-neutral-500 hover:text-neutral-900 dark:text-white/55 dark:hover:text-white'
                   }`}
                 >
                   <KeyRound className="w-3.5 h-3.5" />
@@ -430,7 +448,7 @@ export function LoginPage() {
                       setErrorMsg(null);
                     }}
                     className={`flex-1 h-10 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                      mode === 'register' ? 'ios-glass-selected' : 'text-white/55 hover:text-white'
+                      mode === 'register' ? 'ios-glass-selected' : 'text-neutral-500 hover:text-neutral-900 dark:text-white/55 dark:hover:text-white'
                     }`}
                   >
                     <UserPlus className="w-3.5 h-3.5" />
@@ -442,7 +460,7 @@ export function LoginPage() {
               {mode === 'register' && (
                 <h2 className="relative font-display font-extrabold text-2xl mb-1.5">{isFa ? 'یک حساب بساز' : 'Create your account'}</h2>
               )}
-              <p className="relative text-xs sm:text-sm text-white/50 mb-6">
+              <p className="relative text-xs sm:text-sm text-neutral-500 dark:text-white/50 mb-6">
                 {mode === 'login'
                   ? isFa
                     ? demo
@@ -493,7 +511,7 @@ export function LoginPage() {
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
                       aria-label={showPassword ? (isFa ? 'پنهان‌کردن رمز' : 'Hide password') : isFa ? 'نمایش رمز' : 'Show password'}
-                      className="w-8 h-8 rounded-lg text-white/45 hover:text-white hover:bg-white/10 flex items-center justify-center transition cursor-pointer"
+                      className="w-8 h-8 rounded-lg text-neutral-400 dark:text-white/45 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 flex items-center justify-center transition cursor-pointer"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -515,11 +533,11 @@ export function LoginPage() {
                       className="overflow-hidden"
                     >
                       {errorMsg ? (
-                        <p role="alert" className="rounded-xl bg-red-500/15 ring-1 ring-red-400/40 px-3.5 py-2.5 text-xs text-red-200">
+                        <p role="alert" className="rounded-xl bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-200 ring-1 ring-red-300 dark:ring-red-400/40 px-3.5 py-2.5 text-xs">
                           {errorMsg}
                         </p>
                       ) : (
-                        <p className="rounded-xl bg-amber-400/10 ring-1 ring-amber-300/30 px-3.5 py-2 text-xs text-amber-200">
+                        <p className="rounded-xl bg-amber-50 text-amber-800 dark:bg-amber-400/10 dark:text-amber-200 ring-1 ring-amber-300 dark:ring-amber-300/30 px-3.5 py-2 text-xs">
                           {isFa ? 'Caps Lock روشن است' : 'Caps Lock is on'}
                         </p>
                       )}
@@ -548,8 +566,8 @@ export function LoginPage() {
               </motion.form>
 
               {demo && (
-                <div className="relative mt-6 pt-5 border-t border-white/10">
-                  <p className="text-[11px] font-semibold text-white/45 mb-2.5">
+                <div className="relative mt-6 pt-5 border-t border-neutral-100 dark:border-white/10">
+                  <p className="text-[11px] font-semibold text-neutral-400 dark:text-white/45 mb-2.5">
                     {isFa ? 'حساب‌های نمونه (فقط محیط آزمایشی)' : 'Demo accounts (test environment only)'}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
@@ -560,10 +578,10 @@ export function LoginPage() {
                         disabled={loading}
                         data-testid={`quick-login-${p.id}`}
                         onClick={() => handleDemoLogin(p.id)}
-                        className="text-start rounded-xl bg-white/[0.04] ring-1 ring-white/10 hover:ring-red-400/60 hover:bg-white/[0.08] px-3 py-2 transition cursor-pointer"
+                        className="text-start rounded-xl bg-neutral-50 dark:bg-white/[0.04] ring-1 ring-black/5 dark:ring-white/10 hover:ring-red-400/60 hover:bg-white dark:hover:bg-white/[0.08] px-3 py-2 transition cursor-pointer"
                       >
                         <div className="text-xs font-bold truncate">{isFa ? p.nameFa : p.nameEn}</div>
-                        <div className="text-[10px] text-white/45 truncate">{isFa ? p.roleFa : p.roleEn}</div>
+                        <div className="text-[10px] text-neutral-400 dark:text-white/45 truncate">{isFa ? p.roleFa : p.roleEn}</div>
                       </button>
                     ))}
                   </div>
@@ -572,14 +590,14 @@ export function LoginPage() {
             </div>
           </div>
 
-          <p className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-white/40">
+          <p className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-neutral-400 dark:text-white/40">
             <ShieldCheck className="w-3.5 h-3.5 text-red-400/80" />
             {isFa ? 'نشست‌ها رمزنگاری‌شده‌اند و همهٔ ورودها در لاگ ممیزی ثبت می‌شود' : 'Sessions are encrypted and every sign-in is audit-logged'}
           </p>
         </section>
       </main>
 
-      <footer className="relative z-10 text-center text-[11px] text-white/30 pb-5">
+      <footer className="relative z-10 text-center text-[11px] text-neutral-400 dark:text-white/30 pb-5">
         © {isFa ? 'شرکت اصفهان چالاک' : 'Esfahan Chalak Co.'}
       </footer>
 
