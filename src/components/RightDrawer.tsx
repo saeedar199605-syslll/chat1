@@ -21,6 +21,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { DateField } from './JalaliDatePicker';
 import { api } from '../lib/api';
 import { getSharedSocket } from '../hooks/useSocket';
 import { useAppStore } from '../store/useAppStore';
@@ -538,11 +539,10 @@ export function RightDrawer({
                   <option value="HIGH">{isFa ? 'بالا' : 'High'}</option>
                   <option value="URGENT">{isFa ? 'فوری' : 'Urgent'}</option>
                 </select>
-                <input
-                  type="date"
+                <DateField
                   value={newTaskDue}
-                  onChange={(e) => setNewTaskDue(e.target.value)}
-                  aria-label="Task due date"
+                  onChange={setNewTaskDue}
+                  ariaLabel="Task due date"
                   className="px-2 py-1.5 text-xs rounded-lg bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200"
                 />
               </div>

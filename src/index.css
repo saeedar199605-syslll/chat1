@@ -194,3 +194,51 @@
     inset 0 0 0 1px rgba(220, 38, 38, 0.16),
     0 6px 16px -6px rgba(0, 0, 0, 0.45);
 }
+
+/* ---- Login: Ember Gate ---- */
+@keyframes loginDrift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(6%, 8%, 0) scale(1.12); }
+}
+.login-aurora { animation: loginDrift 14s ease-in-out infinite; }
+.login-aurora-slow { animation: loginDrift 19s ease-in-out infinite reverse; }
+
+.login-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%);
+}
+
+@keyframes loginSpin { to { transform: rotate(360deg); } }
+.login-spin { animation: loginSpin 9s linear infinite; }
+
+/* Card border: a conic ember that travels around the edge */
+@property --login-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes loginBorder { to { --login-angle: 360deg; } }
+.login-border {
+  background: conic-gradient(from var(--login-angle), rgba(239, 68, 68, 0.05), rgba(239, 68, 68, 0.95) 12%, rgba(251, 146, 60, 0.9) 18%, rgba(239, 68, 68, 0.05) 30%, rgba(239, 68, 68, 0.05));
+  animation: loginBorder 6s linear infinite;
+  box-shadow: 0 30px 80px -20px rgba(220, 38, 38, 0.45);
+}
+
+.login-cta {
+  background: linear-gradient(135deg, #f43f3f 0%, #dc2626 50%, #b91c1c 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 14px 34px -10px rgba(239, 68, 68, 0.75);
+}
+.login-cta:hover { filter: brightness(1.08); }
+
+@keyframes loginShine {
+  0% { transform: translateX(-60%) skewX(-20deg); }
+  60%, 100% { transform: translateX(520%) skewX(-20deg); }
+}
+.login-shine { animation: loginShine 3.2s ease-in-out infinite; }
+[dir="rtl"] .login-shine { animation-direction: reverse; }

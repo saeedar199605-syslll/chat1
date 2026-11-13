@@ -14,6 +14,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { DateField } from './JalaliDatePicker';
 import { api } from '../lib/api';
 import { useAppStore } from '../store/useAppStore';
 import { canPerformWithMatrix, getSubordinateIds } from '../utils/chatLogic';
@@ -741,10 +742,10 @@ export function TasksHubView({ workspaceId, channels, users, onJumpToChannel }: 
                     <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                       {isFa ? 'تاریخ سررسید' : 'Due Date'}
                     </label>
-                    <input
-                      type="date"
+                    <DateField
                       value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
+                      onChange={setDueDate}
+                      ariaLabel={isFa ? 'تاریخ سررسید' : 'Due date'}
                       className="w-full px-2.5 py-2 text-xs rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
                     />
                   </div>

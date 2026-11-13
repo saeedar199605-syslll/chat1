@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { motion } from 'motion/react';
+import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowRight,
   Building2,
@@ -7,64 +7,203 @@ import {
   EyeOff,
   KeyRound,
   Languages,
+  Loader2,
   Lock,
   Mail,
-  Moon,
   ShieldCheck,
-  Sparkles,
-  Sun,
   UserPlus,
+  User as UserIcon,
+  Zap,
+  Radio,
+  ScrollText,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAppStore } from '../store/useAppStore';
 import { useServerInfo } from '../lib/serverInfo';
+import { JALALI_MONTHS_FA, gregorianToJalali } from '../utils/jalali';
 
 const DEMO_PERSONAS = [
-  {
-    id: 'usr_elena',
-    nameFa: 'النا روستوا',
-    nameEn: 'Elena Rostova',
-    roleFa: 'سوپر ادمین / مدیرعامل',
-    roleEn: 'Super Admin / CEO',
-    deptFa: 'مدیریت ارشد',
-    email: 'elena.rostova@acme.io',
-  },
-  {
-    id: 'usr_marcus',
-    nameFa: 'مارکوس ونس',
-    nameEn: 'Marcus Vance',
-    roleFa: 'مدیر واحد فنی',
-    roleEn: 'Dept Manager',
-    deptFa: 'فنی و مهندسی',
-    email: 'marcus.vance@acme.io',
-  },
-  {
-    id: 'usr_dariush',
-    nameFa: 'داریوش فراهانی',
-    nameEn: 'Dariush Farahani',
-    roleFa: 'کارمند ارشد سیستم',
-    roleEn: 'Member',
-    deptFa: 'زیرساخت و عملیات',
-    email: 'dariush.farahani@acme.io',
-  },
-  {
-    id: 'usr_lucas',
-    nameFa: 'لوکاس کیم',
-    nameEn: 'Lucas Kim',
-    roleFa: 'مهمان / مشاور پروژه',
-    roleEn: 'Guest',
-    deptFa: 'مشاوره برون‌سازمانی',
-    email: 'lucas.kim@acme.io',
-  },
+  { id: 'usr_elena', nameFa: 'النا روستوا', nameEn: 'Elena Rostova', roleFa: 'سوپر ادمین / مدیرعامل', roleEn: 'Super Admin / CEO', email: 'elena.rostova@acme.io' },
+  { id: 'usr_marcus', nameFa: 'مارکوس ونس', nameEn: 'Marcus Vance', roleFa: 'مدیر واحد فنی', roleEn: 'Dept Manager', email: 'marcus.vance@acme.io' },
+  { id: 'usr_dariush', nameFa: 'داریوش فراهانی', nameEn: 'Dariush Farahani', roleFa: 'کارمند ارشد سیستم', roleEn: 'Member', email: 'dariush.farahani@acme.io' },
+  { id: 'usr_lucas', nameFa: 'لوکاس کیم', nameEn: 'Lucas Kim', roleFa: 'مهمان / مشاور پروژه', roleEn: 'Guest', email: 'lucas.kim@acme.io' },
 ];
+
+const faDigits = (v: number | string) => String(v).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+
+/** Embers that rise, drift, flee the cursor and burst on click. Pauses when the tab is hidden. */
+function EmberField() {
+  const ref = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    let w = 0;
+    let h = 0;
+    let raf = 0;
+    const mouse = { x: -9999, y: -9999 };
+
+    interface P { x: number; y: number; vx: number; vy: number; r: number; life: number; max: number; hue: number }
+    const make = (x?: number, y?: number, burst = false): P => ({
+      x: x ?? Math.random() * w,
+      y: y ?? (burst ? 0 : Math.random() * h),
+      vx: (Math.random() - 0.5) * (burst ? 5 : 0.35),
+      vy: burst ? -(Math.random() * 3.5 + 0.8) : -(Math.random() * 0.8 + 0.2),
+      r: Math.random() * 2.3 + 0.6,
+      life: burst ? 0 : Math.random() * 300,
+      max: burst ? 50 + Math.random() * 50 : 320 + Math.random() * 420,
+      hue: Math.random() * 32,
+    });
+
+    const resize = () => {
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    const count = Math.round(Math.min(140, (w * h) / 14000));
+    const ps: P[] = Array.from({ length: count }, () => make());
+
+    const frame = () => {
+      raf = requestAnimationFrame(frame);
+      if (document.hidden) return;
+      ctx.clearRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < ps.length; i++) {
+        const p = ps[i];
+        const dx = p.x - mouse.x;
+        const dy = p.y - mouse.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < 22500) {
+          const d = Math.sqrt(d2) || 1;
+          const f = (150 - d) / 150;
+          p.vx += (dx / d) * f * 0.35;
+          p.vy += (dy / d) * f * 0.35;
+        }
+        p.vx *= 0.985;
+        p.vy = p.vy * 0.985 + (-0.012);
+        p.x += p.vx + Math.sin((p.y + p.life) * 0.012) * 0.22;
+        p.y += p.vy;
+        p.life++;
+        const a = Math.sin(Math.PI * Math.min(1, p.life / p.max));
+        if (p.life >= p.max || p.y < -20) {
+          ps[i] = make(undefined, h + 10);
+          ps[i].life = 0;
+          continue;
+        }
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 7);
+        g.addColorStop(0, `hsla(${p.hue},100%,62%,${a * 0.85})`);
+        g.addColorStop(0.35, `hsla(${p.hue},100%,50%,${a * 0.28})`);
+        g.addColorStop(1, `hsla(${p.hue},100%,45%,0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+
+    const onMove = (e: PointerEvent) => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    };
+    const onLeave = () => {
+      mouse.x = mouse.y = -9999;
+    };
+    const onClick = (e: MouseEvent) => {
+      for (let i = 0; i < 34; i++) {
+        const s = make(e.clientX, e.clientY, true);
+        s.vy = (Math.random() - 0.5) * 6;
+        ps.push(s);
+      }
+      if (ps.length > 420) ps.splice(0, ps.length - 420);
+    };
+
+    window.addEventListener('resize', resize);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerleave', onLeave);
+    window.addEventListener('click', onClick);
+    if (reduce) {
+      frame();
+      cancelAnimationFrame(raf);
+    } else {
+      raf = requestAnimationFrame(frame);
+    }
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', resize);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerleave', onLeave);
+      window.removeEventListener('click', onClick);
+    };
+  }, []);
+
+  return <canvas ref={ref} aria-hidden className="pointer-events-none fixed inset-0 z-0" />;
+}
+
+function useNow() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
+}
+
+function Field(props: {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  autoComplete?: string;
+  minLength?: number;
+  required?: boolean;
+  trailing?: React.ReactNode;
+  dir?: 'ltr' | 'rtl';
+  testId?: string;
+}) {
+  return (
+    <div className="relative group">
+      <span className="absolute start-4 top-1/2 -translate-y-1/2 text-white/35 group-focus-within:text-red-400 transition-colors">
+        {props.icon}
+      </span>
+      <input
+        id={props.id}
+        data-testid={props.testId}
+        type={props.type ?? 'text'}
+        value={props.value}
+        onChange={(e) => props.onChange(e.target.value)}
+        placeholder=" "
+        autoComplete={props.autoComplete}
+        minLength={props.minLength}
+        required={props.required ?? true}
+        dir={props.dir}
+        className="peer w-full h-14 ps-11 pe-12 pt-5 rounded-2xl bg-white/[0.045] text-white text-sm ring-1 ring-white/10 hover:ring-white/20 focus:ring-2 focus:ring-red-500/80 focus:bg-white/[0.07] outline-none transition placeholder-transparent"
+      />
+      <label
+        htmlFor={props.id}
+        className="pointer-events-none absolute start-11 top-2 text-[11px] font-medium text-white/45 transition-all peer-placeholder-shown:top-[18px] peer-placeholder-shown:text-sm peer-focus:top-2 peer-focus:text-[11px] peer-focus:text-red-300"
+      >
+        {props.label}
+      </label>
+      {props.trailing && <span className="absolute end-3 top-1/2 -translate-y-1/2">{props.trailing}</span>}
+    </div>
+  );
+}
 
 export function LoginPage() {
   const setAuth = useAppStore((s) => s.setAuth);
   const showToast = useAppStore((s) => s.showToast);
   const locale = useAppStore((s) => s.locale);
   const setLocale = useAppStore((s) => s.setLocale);
-  const theme = useAppStore((s) => s.theme);
-  const setTheme = useAppStore((s) => s.setTheme);
 
   const isFa = locale === 'fa';
   const info = useServerInfo();
@@ -73,11 +212,32 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [department, setDepartment] = useState('فنی و مهندسی');
-  const [jobTitle, setJobTitle] = useState('کارشناس ارشد');
+  const [department, setDepartment] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [capsOn, setCapsOn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [shake, setShake] = useState(0);
+  const [wordIdx, setWordIdx] = useState(0);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const now = useNow();
+
+  const words = isFa ? ['سرعت', 'هماهنگی', 'امنیت', 'شفافیت'] : ['Speed', 'Alignment', 'Security', 'Clarity'];
+  useEffect(() => {
+    const t = setInterval(() => setWordIdx((i) => (i + 1) % 4), 2600);
+    return () => clearInterval(t);
+  }, []);
+
+  const j = gregorianToJalali(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  const clock = isFa
+    ? `${faDigits(j.jd)} ${JALALI_MONTHS_FA[j.jm - 1]} ${faDigits(j.jy)} · ${faDigits(now.toTimeString().slice(0, 8))}`
+    : `${now.toDateString().slice(4)} · ${now.toTimeString().slice(0, 8)}`;
+
+  const fail = (msg: string) => {
+    setErrorMsg(msg);
+    setShake((n) => n + 1);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,7 +260,7 @@ export function LoginPage() {
         showToast(isFa ? `حساب کاربری ${res.user.displayName} ساخته شد` : `Account created for ${res.user.displayName}`);
       }
     } catch (err) {
-      setErrorMsg((err as Error).message);
+      fail((err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -114,321 +274,333 @@ export function LoginPage() {
       setAuth(res.accessToken, res.refreshToken, res.user);
       showToast(isFa ? `ورود موفق به حساب ${res.user.displayName}` : `Signed in as ${res.user.displayName}`);
     } catch (err) {
-      setErrorMsg((err as Error).message);
+      fail((err as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
+  // Gentle 3D tilt toward the cursor
+  const onTilt = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = cardRef.current;
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const r = el.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width - 0.5;
+    const y = (e.clientY - r.top) / r.height - 0.5;
+    el.style.transform = `perspective(1100px) rotateY(${x * 7}deg) rotateX(${-y * 7}deg)`;
+    el.style.setProperty('--mx', `${(x + 0.5) * 100}%`);
+    el.style.setProperty('--my', `${(y + 0.5) * 100}%`);
+  };
+  const resetTilt = () => {
+    if (cardRef.current) cardRef.current.style.transform = '';
+  };
+
+  const features = [
+    { icon: Zap, fa: 'گفتگوی لحظه‌ای بدون تأخیر', en: 'Zero-lag realtime chat' },
+    { icon: Radio, fa: 'جلسه و تماس گروهی', en: 'Huddles & group calls' },
+    { icon: ShieldCheck, fa: 'امنیت و کنترل دسترسی', en: 'Secure role-based access' },
+    { icon: ScrollText, fa: 'ممیزی کامل فعالیت‌ها', en: 'Complete audit trail' },
+  ];
+
   return (
     <div
       data-testid="login-page"
-      className="min-h-screen w-full ios-mesh-bg flex flex-col justify-between p-4 sm:p-8 overflow-y-auto relative"
+      className="relative min-h-screen w-full overflow-x-hidden overflow-y-auto bg-[#080406] text-white"
     >
-      {/* Ambient Liquid Glass Blobs */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-24 -start-24 w-96 h-96 rounded-full bg-red-500/10 blur-3xl" />
-        <div className="absolute -bottom-24 -end-24 w-[28rem] h-[28rem] rounded-full bg-red-600/10 blur-3xl" />
+      {/* Atmosphere */}
+      <div aria-hidden className="pointer-events-none fixed inset-0">
+        <div className="login-aurora absolute -top-1/3 -start-1/4 w-[70vw] h-[70vw] rounded-full bg-[radial-gradient(circle,rgba(239,68,68,0.5),transparent_62%)] blur-2xl" />
+        <div className="login-aurora-slow absolute -bottom-1/3 -end-1/4 w-[65vw] h-[65vw] rounded-full bg-[radial-gradient(circle,rgba(190,18,60,0.55),transparent_62%)] blur-2xl" />
+        <div className="absolute inset-0 login-grid" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,rgba(0,0,0,0.65)_100%)]" />
       </div>
+      <EmberField />
 
-      {/* Top Controls Bar */}
-      <header className="relative z-10 w-full max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-[240px] flex-1">
-          <div className="brand-tile w-14 h-14 rounded-2xl p-2 flex items-center justify-center shrink-0">
-            <img src="/assets/esfahan-chalak-logo.png" alt="اصفهان چالاک" className="max-w-full max-h-full object-contain" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="font-display font-bold text-base sm:text-lg text-neutral-900 dark:text-white">
-              {isFa ? 'پلتفرم ارتباطات سازمانی اصفهان چالاک' : 'Esfahan Chalak Enterprise Suite'}
-            </h1>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              {isFa ? 'سامانه یکپارچه گفتگو، وظایف، جلسات و ممیزی امنیتی' : 'Unified Messaging, Tasks, Meetings & Governance'}
-            </p>
-          </div>
+      {/* Top bar */}
+      <header className="relative z-10 flex items-center justify-between px-5 sm:px-10 pt-5">
+        <div className="flex items-center gap-2 text-[11px] sm:text-xs text-white/55 tabular-nums">
+          <span className="ember-pulse w-2 h-2 rounded-full bg-emerald-400" />
+          <span>{clock}</span>
         </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setLocale(locale === 'fa' ? 'en' : 'fa')}
-            className="px-3 py-1.5 rounded-xl ios-glass-card border border-neutral-200/80 dark:border-neutral-700/80 text-xs font-medium text-neutral-700 dark:text-neutral-200 hover:border-red-400 flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
-          >
-            <Languages className="w-3.5 h-3.5 text-red-600" />
-            <span>{locale === 'fa' ? 'FA' : 'EN'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-            aria-label={theme === 'light' ? 'Dark Mode' : 'Light Mode'}
-            className="p-2 rounded-xl ios-glass-card border border-neutral-200/80 dark:border-neutral-700/80 text-neutral-700 dark:text-neutral-200 hover:border-red-400 transition-colors"
-          >
-            {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setLocale(locale === 'fa' ? 'en' : 'fa')}
+          className="h-9 px-3.5 rounded-full bg-white/[0.06] ring-1 ring-white/10 hover:bg-white/10 hover:ring-red-400/50 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+        >
+          <Languages className="w-3.5 h-3.5 text-red-400" />
+          <span>{locale === 'fa' ? 'FA · English' : 'EN · فارسی'}</span>
+        </button>
       </header>
 
-      {/* Main Auth Grid */}
-      <main className={`relative z-10 w-full max-w-5xl mx-auto my-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch ${demo ? '' : 'max-w-xl'}`}>
-        {/* Left / Auth Form Card */}
-        <motion.section
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-          className={`${demo ? 'lg:col-span-7' : 'lg:col-span-12'} rounded-3xl ios-glass-strong border border-neutral-200/80 dark:border-neutral-800 p-6 sm:p-8 flex flex-col justify-between`}
-        >
-          <div>
-            {/* Mode Switch Tabs */}
-            <div className="inline-flex p-1 rounded-2xl bg-neutral-100/90 dark:bg-neutral-800/90 border border-neutral-200/70 dark:border-neutral-700/60 mb-6">
-              <button
-                type="button"
-                data-testid="login-mode-signin"
-                onClick={() => {
-                  setMode('login');
-                  setErrorMsg(null);
-                }}
-                className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-                  mode === 'login'
-                    ? 'bg-red-600 text-white shadow-sm'
-                    : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-900'
-                }`}
-              >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>{isFa ? 'ورود به حساب سازمانی' : 'Sign In'}</span>
-              </button>
-              {info?.registration && <button
-                type="button"
-                data-testid="login-mode-register"
-                onClick={() => {
-                  setMode('register');
-                  setErrorMsg(null);
-                }}
-                className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-                  mode === 'register'
-                    ? 'bg-red-600 text-white shadow-sm'
-                    : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-900'
-                }`}
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>{isFa ? 'ثبت‌نام همکار جدید' : 'Create Account'}</span>
-              </button>}
+      <main className="relative z-10 mx-auto w-full max-w-6xl px-5 sm:px-10 py-8 lg:py-12 grid lg:grid-cols-[1.05fr_0.95fr] gap-10 lg:gap-16 items-center min-h-[calc(100vh-72px)]">
+        {/* Brand / hero */}
+        <section className="flex flex-col items-center lg:items-start text-center lg:text-start">
+          <div className="relative w-40 h-40 sm:w-44 sm:h-44 mb-8">
+            <span aria-hidden className="login-spin absolute -inset-5 rounded-full bg-[conic-gradient(from_0deg,#ef4444,#fb923c,#ef4444,#7f1d1d,#ef4444)] opacity-80 blur-xl" />
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                aria-hidden
+                className="absolute inset-0 rounded-[2.4rem] border border-red-400/40 animate-ping"
+                style={{ animationDelay: `${i * 0.9}s`, animationDuration: '3.2s' }}
+              />
+            ))}
+            <div className="brand-tile relative w-full h-full rounded-[2.4rem] p-7 flex items-center justify-center">
+              <img
+                src="/assets/esfahan-chalak-logo.png"
+                alt="اصفهان چالاک"
+                className="max-w-full max-h-full object-contain drop-shadow-[0_6px_14px_rgba(220,38,38,0.35)]"
+              />
             </div>
+          </div>
 
-            <h2 className="font-display font-bold text-xl sm:text-2xl text-neutral-900 dark:text-white mb-1.5">
-              {mode === 'login'
-                ? isFa
-                  ? 'ورود امن به میز کار اصفهان چالاک'
-                  : 'Sign in to Esfahan Chalak'
-                : isFa
-                  ? 'ایجاد حساب کاربری در سازمان'
-                  : 'Create Organizational Account'}
-            </h2>
-            <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 mb-6">
-              {mode === 'login'
-                ? isFa
-                  ? (demo ? 'ایمیل سازمانی و رمز عبور خود را وارد کنید یا از پنل دسترسی سریع استفاده نمایید.' : 'ایمیل سازمانی و رمز عبور خود را وارد کنید.')
-                  : 'Enter your corporate email and password to access your workspaces.'
-                : isFa
-                  ? 'مشخصات فردی و واحد سازمانی خود را برای عضویت در شرکت اصفهان چالاک ثبت کنید.'
-                  : 'Register your corporate profile and department membership.'}
-            </p>
+          <p className="text-red-300/90 text-xs sm:text-sm font-semibold mb-3">
+            {isFa ? 'پلتفرم ارتباطات سازمانی اصفهان چالاک' : 'Esfahan Chalak Enterprise Suite'}
+          </p>
+          <h1 className="font-display font-extrabold text-4xl sm:text-5xl xl:text-6xl leading-[1.15]">
+            <span className="block text-white/95">{isFa ? 'کار تیمی با' : 'Teamwork with'}</span>
+            <span className="block h-[1.25em] relative overflow-hidden">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={`${locale}-${wordIdx}`}
+                  initial={{ y: '90%', opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: '-90%', opacity: 0 }}
+                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                  className="absolute inset-x-0 lg:inset-x-auto bg-gradient-to-r from-red-400 via-orange-300 to-red-500 bg-clip-text text-transparent"
+                >
+                  {words[wordIdx]}
+                </motion.span>
+              </AnimatePresence>
+            </span>
+          </h1>
+          <p className="mt-5 max-w-md text-sm sm:text-base text-white/60 leading-relaxed">
+            {isFa
+              ? 'گفتگو، وظایف، جلسه، تأییدیه و ممیزی امنیتی؛ همه در یک میزکار یکپارچه، سریع و امن.'
+              : 'Chat, tasks, meetings, approvals and security audit in one fast, secure workspace.'}
+          </p>
 
-            {errorMsg && (
-              <motion.div
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-4 px-3.5 py-2.5 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 text-xs font-medium text-red-700 dark:text-red-300"
+          <ul className="mt-8 hidden sm:grid grid-cols-2 gap-2.5 w-full max-w-lg">
+            {features.map((f) => (
+              <li
+                key={f.en}
+                className="flex items-center gap-2.5 rounded-2xl bg-white/[0.04] ring-1 ring-white/10 px-3.5 py-2.5 text-xs text-white/75"
               >
-                {errorMsg}
-              </motion.div>
-            )}
+                <span className="w-8 h-8 rounded-xl bg-red-500/15 ring-1 ring-red-400/25 flex items-center justify-center shrink-0">
+                  <f.icon className="w-4 h-4 text-red-300" />
+                </span>
+                <span>{isFa ? f.fa : f.en}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {mode === 'register' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                      {isFa ? 'نام و نام خانوادگی' : 'Full Name'}
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      placeholder={isFa ? 'مثلاً سارا محمدی' : 'Sara Mohammadi'}
-                      className="w-full px-3.5 py-2.5 text-sm rounded-xl bg-white/80 dark:bg-neutral-800/80 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                      {isFa ? 'واحد سازمانی' : 'Department / Unit'}
-                    </label>
-                    <input
-                      type="text"
-                      value={department}
-                      onChange={(e) => setDepartment(e.target.value)}
-                      placeholder={isFa ? 'فنی و مهندسی' : 'Engineering'}
-                      className="w-full px-3.5 py-2.5 text-sm rounded-xl bg-white/80 dark:bg-neutral-800/80 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-                </div>
-              )}
+        {/* Auth card */}
+        <section className="w-full max-w-md mx-auto lg:mx-0 lg:justify-self-end" onPointerMove={onTilt} onPointerLeave={resetTilt}>
+          <div ref={cardRef} className="login-card relative rounded-[2rem] p-[1.5px] transition-transform duration-200 ease-out will-change-transform">
+            <span aria-hidden className="login-border absolute inset-0 rounded-[2rem]" />
+            <div className="relative rounded-[calc(2rem-1.5px)] bg-[#12090c]/95 p-6 sm:p-8 overflow-hidden">
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-70"
+                style={{ background: 'radial-gradient(420px circle at var(--mx,50%) var(--my,0%), rgba(239,68,68,0.16), transparent 60%)' }}
+              />
 
-              {mode === 'register' && (
-                <div>
-                  <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                    {isFa ? 'عنوان شغلی' : 'Job Title'}
-                  </label>
-                  <input
-                    type="text"
-                    value={jobTitle}
-                    onChange={(e) => setJobTitle(e.target.value)}
-                    placeholder={isFa ? 'کارشناس ارشد توسعه سیستم' : 'Senior Engineer'}
-                    className="w-full px-3.5 py-2.5 text-sm rounded-xl bg-white/80 dark:bg-neutral-800/80 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-red-500"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                  {isFa ? 'ایمیل سازمانی' : 'Corporate Email'}
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-neutral-400 absolute start-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="email"
-                    required
-                    data-testid="login-email-input"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@esfahan-chalak.ir"
-                    dir="ltr"
-                    className="w-full ps-10 pe-3.5 py-2.5 text-sm rounded-xl bg-white/80 dark:bg-neutral-800/80 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-red-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                  {isFa ? 'رمز عبور' : 'Password'}
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-neutral-400 absolute start-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    minLength={8}
-                    data-testid="login-password-input"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    dir="ltr"
-                    className="w-full ps-10 pe-10 py-2.5 text-sm rounded-xl bg-white/80 dark:bg-neutral-800/80 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-red-500"
-                  />
+              <div className="relative flex items-center gap-1 p-1 rounded-2xl bg-white/[0.05] ring-1 ring-white/10 mb-6">
+                <button
+                  type="button"
+                  data-testid="login-mode-signin"
+                  onClick={() => {
+                    setMode('login');
+                    setErrorMsg(null);
+                  }}
+                  className={`flex-1 h-10 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                    mode === 'login' ? 'ios-glass-selected' : 'text-white/55 hover:text-white'
+                  }`}
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>{isFa ? 'ورود' : 'Sign in'}</span>
+                </button>
+                {info?.registration && (
                   <button
                     type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    aria-label={isFa ? 'نمایش یا مخفی‌سازی رمز' : 'Toggle password visibility'}
-                    className="absolute end-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                    data-testid="login-mode-register"
+                    onClick={() => {
+                      setMode('register');
+                      setErrorMsg(null);
+                    }}
+                    className={`flex-1 h-10 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                      mode === 'register' ? 'ios-glass-selected' : 'text-white/55 hover:text-white'
+                    }`}
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>{isFa ? 'ثبت‌نام' : 'Create account'}</span>
                   </button>
-                </div>
+                )}
               </div>
 
-              <motion.button
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.985 }}
-                type="submit"
-                disabled={loading}
-                data-testid="login-submit-btn"
-                className="w-full py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-red-600/20 transition-colors cursor-pointer"
+              <h2 className="relative font-display font-extrabold text-2xl mb-1.5">
+                {mode === 'login' ? (isFa ? 'خوش برگشتی 👋' : 'Welcome back 👋') : isFa ? 'یک حساب بساز' : 'Create your account'}
+              </h2>
+              <p className="relative text-xs sm:text-sm text-white/50 mb-6">
+                {mode === 'login'
+                  ? isFa
+                    ? demo
+                      ? 'ایمیل و رمز عبور سازمانی را وارد کن، یا از حساب‌های نمونه پایین استفاده کن.'
+                      : 'با ایمیل و رمز عبور سازمانی وارد میزکار شو.'
+                    : demo
+                      ? 'Enter your work email and password, or pick a demo account below.'
+                      : 'Sign in to your workspace with your work email.'
+                  : isFa
+                    ? 'چند ثانیه و آماده‌ای.'
+                    : 'It only takes a few seconds.'}
+              </p>
+
+              <motion.form
+                key={shake}
+                animate={shake ? { x: [0, -9, 9, -6, 6, 0] } : undefined}
+                transition={{ duration: 0.4 }}
+                onSubmit={handleSubmit}
+                className="relative space-y-3"
               >
-                <span>
-                  {loading
-                    ? isFa
-                      ? 'در حال احراز هویت...'
-                      : 'Authenticating...'
-                    : mode === 'login'
-                      ? isFa
-                        ? 'ورود به سامانه'
-                        : 'Sign In'
-                      : isFa
-                        ? 'ثبت‌نام و ورود'
-                        : 'Register & Enter'}
-                </span>
-                <ArrowRight className={`w-4 h-4 ${isFa ? 'rotate-180' : ''}`} />
-              </motion.button>
-            </form>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-neutral-200/70 dark:border-neutral-800 flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400">
-            <span className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-red-600" />
-              {isFa ? 'رمزنگاری JWT و ثبت کامل لاگ ممیزی' : 'JWT Auth & Complete Audit Logging'}
-            </span>
-            {demo && <span className="font-mono">Workstream!2026</span>}
-          </div>
-        </motion.section>
-
-        {/* Right / Quick Access Personas (demo servers only) */}
-        {demo && <motion.aside
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 28, delay: 0.06 }}
-          className="lg:col-span-5 rounded-3xl ios-glass-card border border-neutral-200/80 dark:border-neutral-800 p-6 flex flex-col justify-between"
-        >
-          <div>
-            <div className="flex items-center gap-2 text-red-600 dark:text-red-400 text-xs font-semibold mb-2">
-              <Building2 className="w-4 h-4" />
-              <span>{isFa ? 'ورود سریع بر اساس نقش سازمانی' : 'Quick Role Access'}</span>
-            </div>
-            <h3 className="font-display font-bold text-base text-neutral-900 dark:text-white mb-1">
-              {isFa ? 'آزمایش فوری سطوح دسترسی' : 'Instant Role Switcher'}
-            </h3>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4 leading-relaxed">
-              {isFa
-                ? 'برای بررسی بخش سوپر ادمین، مدیریت واحد، کارمند یا کاربر مهمان، روی هر حساب کلیک کنید.'
-                : 'Select an organizational role below to inspect Super Admin, Manager, Member, or Guest views.'}
-            </p>
-
-            <div className="space-y-2.5">
-              {DEMO_PERSONAS.map((p) => (
-                <motion.button
-                  key={p.id}
-                  whileHover={{ scale: 1.015 }}
-                  whileTap={{ scale: 0.985 }}
-                  type="button"
-                  disabled={loading}
-                  data-testid={`quick-login-${p.id}`}
-                  onClick={() => handleDemoLogin(p.id)}
-                  className="w-full text-start p-3 rounded-2xl bg-white/75 dark:bg-neutral-800/75 border border-neutral-200/80 dark:border-neutral-700/80 hover:border-red-400 dark:hover:border-red-700 transition-all flex items-center justify-between gap-3 group cursor-pointer"
-                >
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-neutral-900 dark:text-white truncate">
-                      {isFa ? p.nameFa : p.nameEn}
-                    </div>
-                    <div className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate mt-0.5">
-                      {isFa ? `${p.roleFa} · ${p.deptFa}` : `${p.roleEn} · ${p.email}`}
-                    </div>
+                {mode === 'register' && (
+                  <Field id="lg-name" label={isFa ? 'نام و نام خانوادگی' : 'Full name'} icon={<UserIcon className="w-4 h-4" />} value={fullName} onChange={setFullName} autoComplete="name" />
+                )}
+                <Field
+                  id="lg-email"
+                  testId="login-email"
+                  label={isFa ? 'ایمیل سازمانی' : 'Work email'}
+                  icon={<Mail className="w-4 h-4" />}
+                  type="email"
+                  value={email}
+                  onChange={setEmail}
+                  autoComplete="username"
+                  dir="ltr"
+                />
+                <Field
+                  id="lg-pass"
+                  testId="login-password"
+                  label={isFa ? 'رمز عبور' : 'Password'}
+                  icon={<Lock className="w-4 h-4" />}
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={setPassword}
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  minLength={mode === 'register' ? 8 : undefined}
+                  dir="ltr"
+                  trailing={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? (isFa ? 'پنهان‌کردن رمز' : 'Hide password') : isFa ? 'نمایش رمز' : 'Show password'}
+                      className="w-8 h-8 rounded-lg text-white/45 hover:text-white hover:bg-white/10 flex items-center justify-center transition cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  }
+                />
+                {mode === 'register' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field id="lg-dept" label={isFa ? 'واحد سازمانی' : 'Department'} icon={<Building2 className="w-4 h-4" />} value={department} onChange={setDepartment} required={false} />
+                    <Field id="lg-job" label={isFa ? 'عنوان شغلی' : 'Job title'} icon={<UserIcon className="w-4 h-4" />} value={jobTitle} onChange={setJobTitle} required={false} />
                   </div>
-                  <span className="px-2.5 py-1 rounded-xl bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 text-[11px] font-semibold group-hover:bg-red-600 group-hover:text-white transition-colors whitespace-nowrap shrink-0">
-                    {isFa ? 'ورود' : 'Enter'}
-                  </span>
-                </motion.button>
-              ))}
+                )}
+
+                <AnimatePresence>
+                  {(capsOn || errorMsg) && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      {errorMsg ? (
+                        <p role="alert" className="rounded-xl bg-red-500/15 ring-1 ring-red-400/40 px-3.5 py-2.5 text-xs text-red-200">
+                          {errorMsg}
+                        </p>
+                      ) : (
+                        <p className="rounded-xl bg-amber-400/10 ring-1 ring-amber-300/30 px-3.5 py-2 text-xs text-amber-200">
+                          {isFa ? 'Caps Lock روشن است' : 'Caps Lock is on'}
+                        </p>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  data-testid="login-submit"
+                  className="login-cta group relative w-full h-14 mt-2 rounded-2xl font-extrabold text-sm text-white overflow-hidden flex items-center justify-center gap-2 disabled:opacity-70 cursor-pointer active:scale-[0.99] transition-transform"
+                >
+                  <span aria-hidden className="login-shine absolute inset-y-0 -start-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/35 to-transparent skew-x-[-20deg]" />
+                  {loading ? (
+                    <Loader2 className="relative w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <span className="relative">
+                        {mode === 'login' ? (isFa ? 'ورود به میزکار' : 'Enter workspace') : isFa ? 'ساخت حساب و ورود' : 'Create account'}
+                      </span>
+                      <ArrowRight className="relative w-4 h-4 transition-transform rtl:rotate-180 group-hover:translate-x-1 rtl:group-hover:-translate-x-1" />
+                    </>
+                  )}
+                </button>
+              </motion.form>
+
+              {demo && (
+                <div className="relative mt-6 pt-5 border-t border-white/10">
+                  <p className="text-[11px] font-semibold text-white/45 mb-2.5">
+                    {isFa ? 'حساب‌های نمونه (فقط محیط آزمایشی)' : 'Demo accounts (test environment only)'}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {DEMO_PERSONAS.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={loading}
+                        data-testid={`quick-login-${p.id}`}
+                        onClick={() => handleDemoLogin(p.id)}
+                        className="text-start rounded-xl bg-white/[0.04] ring-1 ring-white/10 hover:ring-red-400/60 hover:bg-white/[0.08] px-3 py-2 transition cursor-pointer"
+                      >
+                        <div className="text-xs font-bold truncate">{isFa ? p.nameFa : p.nameEn}</div>
+                        <div className="text-[10px] text-white/45 truncate">{isFa ? p.roleFa : p.roleEn}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="mt-6 p-3.5 rounded-2xl bg-red-50/70 dark:bg-red-950/25 border border-red-200/70 dark:border-red-900/40 text-[11px] text-neutral-700 dark:text-neutral-300 leading-relaxed">
-            {isFa
-              ? 'تمامی نشست‌ها با توکن امضاشده JWT برقرار شده و در جدول لاگ‌های امنیتی سوپر ادمین ثبت می‌شوند.'
-              : 'All sign-ins issue signed JWT tokens and are recorded in the Super Admin audit log.'}
-          </div>
-        </motion.aside>}
+          <p className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-white/40">
+            <ShieldCheck className="w-3.5 h-3.5 text-red-400/80" />
+            {isFa ? 'نشست‌ها رمزنگاری‌شده‌اند و همهٔ ورودها در لاگ ممیزی ثبت می‌شود' : 'Sessions are encrypted and every sign-in is audit-logged'}
+          </p>
+        </section>
       </main>
 
-      <footer className="relative z-10 w-full max-w-5xl mx-auto text-center text-[11px] text-neutral-400">
-        {isFa ? '© شرکت اصفهان چالاک — پلتفرم یکپارچه همکاری و مدیریت سازمان' : '© Esfahan Chalak Co. — Enterprise Collaboration Platform'}
+      <footer className="relative z-10 text-center text-[11px] text-white/30 pb-5">
+        © {isFa ? 'شرکت اصفهان چالاک' : 'Esfahan Chalak Co.'}
       </footer>
+
+      {/* Caps lock detection must live on the password input; attach via capture on the page */}
+      <CapsLockWatcher onChange={setCapsOn} />
     </div>
   );
+}
+
+/** Reports Caps Lock state from any keyboard event while the login page is open. */
+function CapsLockWatcher({ onChange }: { onChange: (on: boolean) => void }) {
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (typeof e.getModifierState === 'function') onChange(e.getModifierState('CapsLock'));
+    };
+    window.addEventListener('keydown', h);
+    window.addEventListener('keyup', h);
+    return () => {
+      window.removeEventListener('keydown', h);
+      window.removeEventListener('keyup', h);
+    };
+  }, [onChange]);
+  return null;
 }

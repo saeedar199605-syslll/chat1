@@ -22,6 +22,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
+import { DateField } from './JalaliDatePicker';
 import { api } from '../lib/api';
 import { useAppStore } from '../store/useAppStore';
 import { replaceFileExtension } from '../utils/chatLogic';
@@ -914,19 +915,17 @@ export function DailyToolsModal({ workspaceId, activeChannel, onSendToChat }: Da
                         {isFa ? 'محاسبه اختلاف دو تاریخ' : 'Date Difference'}
                       </h3>
                       <div className="grid grid-cols-2 gap-1.5">
-                        <input
-                          type="date"
+                        <DateField
                           value={diffDateA}
-                          onChange={(e) => setDiffDateA(e.target.value)}
-                          aria-label="Start date"
-                          className="px-2 py-1.5 text-[11px] font-mono rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
+                          onChange={setDiffDateA}
+                          ariaLabel="Start date"
+                          className="px-2 py-1.5 text-[11px] rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
                         />
-                        <input
-                          type="date"
+                        <DateField
                           value={diffDateB}
-                          onChange={(e) => setDiffDateB(e.target.value)}
-                          aria-label="End date"
-                          className="px-2 py-1.5 text-[11px] font-mono rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
+                          onChange={setDiffDateB}
+                          ariaLabel="End date"
+                          className="px-2 py-1.5 text-[11px] rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
                         />
                       </div>
                       <div className="p-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-800/80 text-xs font-bold text-red-600 dark:text-red-400 tabular-nums">
