@@ -1,5 +1,4 @@
-import type { Server as HttpServer } from 'node:http';
-import { Server as SocketIOServer, type Socket } from 'socket.io';
+import { Hub, type Conn as Socket } from './realtime';
 import { canPerformAction } from '../src/utils/chatLogic';
 import { channelAccess, getUserById, verifyAccessToken } from './auth';
 import { db } from './db';
@@ -16,9 +15,9 @@ interface ActiveHuddleRoom {
 const activeHuddles = new Map<string, ActiveHuddleRoom>();
 const typingByChannel = new Map<string, Map<string, { userId: string; displayName: string }>>();
 
-let ioInstance: SocketIOServer | null = null;
+let ioInstance: Hub | null = null;
 
-export function getIO(): SocketIOServer | null {
+export function getIO(): Hub | null {
   return ioInstance;
 }
 
@@ -36,13 +35,8 @@ export function getActiveHuddlesSummary(): Record<string, { participantCount: nu
   return result;
 }
 
-export function initSocketServer(httpServer: HttpServer): SocketIOServer {
-  const io = new SocketIOServer(httpServer, {
-    cors: { origin: process.env.APP_URL || false, methods: ['GET', 'POST'] },
-    maxHttpBufferSize: 1e6,
-    pingInterval: 25000,
-    pingTimeout: 20000,
-  });
+export function initSocketServer(): Hub {
+  const io = new Hub();
 
   ioInstance = io;
 
@@ -346,7 +340,7 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
   return io;
 }
 
-function leaveHuddleRoom(io: SocketIOServer, socket: Socket, channelId: string, userId: string): void {
+function leaveHuddleRoom(io: Hub, socket: Socket, channelId: string, userId: string): void {
   const room = activeHuddles.get(channelId);
   if (!room) return;
   room.participants.delete(userId);
@@ -369,6 +363,6 @@ function visibleHuddles(socket: Socket) {
   return Object.fromEntries(Object.entries(all).filter(([channelId]) => socket.rooms.has(`channel:${channelId}`)));
 }
 
-function broadcastHuddles(io: SocketIOServer): void {
+function broadcastHuddles(io: Hub): void {
   for (const socket of io.sockets.sockets.values()) socket.emit('huddles:snapshot', visibleHuddles(socket));
 }

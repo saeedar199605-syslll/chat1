@@ -1,11 +1,11 @@
 import crypto from 'node:crypto';
-import fs from 'node:fs';
 import path from 'node:path';
 import express, { type Express } from 'express';
-import bcrypt from 'bcryptjs';
-import multer from 'multer';
+import { hashPassword, verifyPassword } from './password';
+import { deleteFile, fileSize, getFile, putFile } from './storage';
+import { clientIp, uploadSingle } from './http';
 import { z } from 'zod';
-import { backupDir, db, uid, uploadDir } from './db';
+import { db, uid } from './db';
 import {
   type AuthenticatedRequest,
   getRoleMatrixFromDb,
@@ -201,27 +201,18 @@ const presignTokens = new Map<
   { channelId: string; userId: string; fileName: string; mimeType: string; sizeBytes: number; expiresAt: number }
 >();
 
-const diskStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    cb(null, `${Date.now()}_${crypto.randomBytes(16).toString('hex')}_${safeName}`);
-  },
-});
-
-const upload = multer({ storage: diskStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+const upload = { single: (field: string) => uploadSingle(field, { maxBytes: 50 * 1024 * 1024 }) };
 
 // Logos/avatars: raster images only (SVG/HTML could carry script), 5 MB max.
-const imageUpload = multer({
-  storage: diskStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => cb(null, /^image\/(png|jpeg|webp|gif)$/.test(file.mimetype)),
-});
+const imageUpload = {
+  single: (field: string) =>
+    uploadSingle(field, { maxBytes: 5 * 1024 * 1024, accept: (mime) => /^image\/(png|jpeg|webp|gif)$/.test(mime) }),
+};
 
 const authRateBuckets = new Map<string, number[]>();
 
 function rateLimitAuth(req: express.Request, res: express.Response, next: express.NextFunction): void {
-  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const ip = clientIp(req);
   const key = `${ip}:${req.path}`;
   const now = Date.now();
   const windowMs = 15 * 60_000;
@@ -249,7 +240,7 @@ function rateLimitAuth(req: express.Request, res: express.Response, next: expres
 }
 
 function noteLoginFailure(req: express.Request): void {
-  const key = `${req.ip || req.socket.remoteAddress || 'unknown'}:${req.path}`;
+  const key = `${clientIp(req)}:${req.path}`;
   authRateBuckets.set(key, [...(authRateBuckets.get(key) || []), Date.now()]);
 }
 
@@ -348,7 +339,7 @@ export function registerApiRoutes(app: Express): void {
       .prepare(`SELECT id, email, passwordHash, role, COALESCE(isActive, 1) as isActive FROM users WHERE lower(email) = lower(?)`)
       .get(parsed.data.email) as { id: string; email: string; passwordHash: string; role: Role; isActive: number } | undefined;
 
-    if (!row || !bcrypt.compareSync(parsed.data.password, row.passwordHash)) {
+    if (!row || !verifyPassword(parsed.data.password, row.passwordHash)) {
       noteLoginFailure(req);
       res.status(401).json({ error: 'Invalid credentials' });
       return;
@@ -400,7 +391,7 @@ export function registerApiRoutes(app: Express): void {
 
     const userId = uid('usr');
     const now = new Date().toISOString();
-    const hash = bcrypt.hashSync(parsed.data.password, 10);
+    const hash = hashPassword(parsed.data.password);
     const fullName = sanitizeHtmlText(parsed.data.fullName);
 
     db.prepare(
@@ -2192,7 +2183,6 @@ export function registerApiRoutes(app: Express): void {
   app.put(
     '/api/uploads/presigned/:key',
     requireAuth,
-    express.raw({ type: '*/*', limit: '50mb' }),
     (req: AuthenticatedRequest, res) => {
       const storageKey = path.basename(req.params.key);
       const meta = presignTokens.get(storageKey);
@@ -2201,8 +2191,8 @@ export function registerApiRoutes(app: Express): void {
         return;
       }
 
-      const buf = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
-      fs.writeFileSync(path.join(uploadDir, storageKey), buf);
+      const buf = req.rawBody ?? Buffer.alloc(0);
+      putFile(storageKey, buf);
       presignTokens.delete(storageKey);
 
       const attId = uid('att');
@@ -2225,11 +2215,11 @@ export function registerApiRoutes(app: Express): void {
     const channelId = String(req.body?.channelId || '');
     if (!file || !channelId) {
       res.status(400).json({ error: 'File and channelId are required' });
-      if (file) fs.rmSync(file.path, { force: true });
+      if (file) deleteFile(file.filename);
       return;
     }
     if (!sendAccess(res, channelAccess(req.authUser!.id, channelId))) {
-      fs.rmSync(file.path, { force: true });
+      deleteFile(file.filename);
       return;
     }
 
@@ -2285,8 +2275,8 @@ export function registerApiRoutes(app: Express): void {
 
   app.get('/api/files/download/:key', (req, res) => {
     const safeKey = path.basename(req.params.key);
-    const filePath = path.join(uploadDir, safeKey);
-    if (!fs.existsSync(filePath)) {
+    const total = fileSize(safeKey);
+    if (total === null) {
       res.status(404).json({ error: 'File not found' });
       return;
     }
@@ -2307,7 +2297,26 @@ export function registerApiRoutes(app: Express): void {
       'Content-Disposition',
       `${inlineOk ? 'inline' : 'attachment'}; filename="${rawName.replace(/[^\x20-\x7E]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(rawName)}`
     );
-    res.sendFile(filePath);
+    const data = getFile(safeKey)!;
+    // Byte ranges so <audio>/<video> can seek.
+    const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
+    res.setHeader('Accept-Ranges', 'bytes');
+    if (range && (range[1] || range[2])) {
+      const start = range[1] ? Number(range[1]) : Math.max(0, total - Number(range[2]));
+      const end = range[1] && range[2] ? Math.min(Number(range[2]), total - 1) : total - 1;
+      if (start > end || start >= total) {
+        res.status(416).setHeader('Content-Range', `bytes */${total}`);
+        res.end();
+        return;
+      }
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${total}`);
+      res.setHeader('Content-Length', String(end - start + 1));
+      res.end(data.subarray(start, end + 1));
+      return;
+    }
+    res.setHeader('Content-Length', String(total));
+    res.end(data);
   });
 
   app.delete('/api/files/:id', requireAuth, (req: AuthenticatedRequest, res) => {
@@ -2324,8 +2333,7 @@ export function registerApiRoutes(app: Express): void {
       return;
     }
     db.prepare(`DELETE FROM attachments WHERE id = ?`).run(att.id);
-    const targetPath = path.join(uploadDir, path.basename(att.storageKey));
-    if (fs.existsSync(targetPath)) fs.unlinkSync(targetPath);
+    deleteFile(path.basename(att.storageKey));
     res.json({ ok: true });
   });
 
@@ -2444,7 +2452,8 @@ export function registerApiRoutes(app: Express): void {
 
     const userId = uid('usr');
     const now = new Date().toISOString();
-    const hash = bcrypt.hashSync('Workstream!2026', 10);
+    // Directory-created members get an unguessable password; an admin sets a real one (Users & Access).
+    const hash = hashPassword(crypto.randomBytes(24).toString('base64url'));
     const fullName = sanitizeHtmlText(parsed.data.fullName);
 
     db.prepare(
@@ -2766,7 +2775,7 @@ export function registerApiRoutes(app: Express): void {
     const snapId = uid('bkp');
     const fileName = `${snapId}.json`;
     const serialized = JSON.stringify(bundle, null, 2);
-    fs.writeFileSync(path.join(backupDir, fileName), serialized, 'utf-8');
+    putFile(`backup/${fileName}`, Buffer.from(serialized, 'utf-8'));
     const sizeBytes = Buffer.byteLength(serialized, 'utf-8');
     const now = new Date().toISOString();
 
@@ -2809,14 +2818,14 @@ export function registerApiRoutes(app: Express): void {
       res.status(404).json({ error: 'Snapshot not found' });
       return;
     }
-    const target = path.join(backupDir, path.basename(row.fileName));
-    if (!fs.existsSync(target)) {
-      res.status(404).json({ error: 'Snapshot archive file missing on disk' });
+    const archive = getFile(`backup/${path.basename(row.fileName)}`);
+    if (!archive) {
+      res.status(404).json({ error: 'Snapshot archive file missing' });
       return;
     }
     res.setHeader('Content-Disposition', `attachment; filename="workstream-${req.params.id}.json"`);
     res.type('application/json');
-    fs.createReadStream(target).pipe(res);
+    res.end(archive);
   });
 
   app.get('/api/backup/export', requireAuth, requireBackupAdmin, (_req, res) => {
@@ -2835,12 +2844,12 @@ export function registerApiRoutes(app: Express): void {
         res.status(404).json({ error: 'Snapshot not found' });
         return;
       }
-      const target = path.join(backupDir, path.basename(row.fileName));
-      if (!fs.existsSync(target)) {
-        res.status(404).json({ error: 'Snapshot file missing on disk' });
+      const archive = getFile(`backup/${path.basename(row.fileName)}`);
+      if (!archive) {
+        res.status(404).json({ error: 'Snapshot file missing' });
         return;
       }
-      payload = JSON.parse(fs.readFileSync(target, 'utf-8'));
+      payload = JSON.parse(archive.toString('utf-8'));
     }
 
     const structural = validateBackupBundle(payload);
@@ -2878,12 +2887,12 @@ export function registerApiRoutes(app: Express): void {
         res.status(404).json({ error: 'Snapshot not found' });
         return;
       }
-      const target = path.join(backupDir, path.basename(row.fileName));
-      if (!fs.existsSync(target)) {
+      const archive = getFile(`backup/${path.basename(row.fileName)}`);
+      if (!archive) {
         res.status(404).json({ error: 'Snapshot archive file missing' });
         return;
       }
-      payload = JSON.parse(fs.readFileSync(target, 'utf-8'));
+      payload = JSON.parse(archive.toString('utf-8'));
     }
 
     const structural = validateBackupBundle(payload);
@@ -2899,34 +2908,30 @@ export function registerApiRoutes(app: Express): void {
       return;
     }
 
-    db.exec('PRAGMA foreign_keys = OFF;');
-    db.exec('BEGIN TRANSACTION;');
     try {
-      for (const tbl of BACKUP_TABLES) {
-        const rows = bundle.tables[tbl];
-        if (!Array.isArray(rows)) continue;
-        const tableCols = (db.prepare(`PRAGMA table_info(${tbl})`).all() as Array<{ name: string }>).map((c) => c.name);
-        db.exec(`DELETE FROM ${tbl}`);
-        for (const r of rows) {
-          const keys = Object.keys(r).filter((k) => tableCols.includes(k));
-          if (keys.length === 0) continue;
-          const placeholders = keys.map(() => '?').join(', ');
-          const values = keys.map((k) => {
-            const v = r[k];
-            if (v === undefined) return null;
-            return v as string | number | null;
-          });
-          db.prepare(`INSERT INTO ${tbl} (${keys.join(', ')}) VALUES (${placeholders})`).run(...values);
+      db.transaction(() => {
+        for (const tbl of BACKUP_TABLES) {
+          const rows = bundle.tables[tbl];
+          if (!Array.isArray(rows)) continue;
+          const tableCols = (db.prepare(`PRAGMA table_info(${tbl})`).all() as Array<{ name: string }>).map((c) => c.name);
+          db.exec(`DELETE FROM ${tbl}`);
+          for (const r of rows) {
+            const keys = Object.keys(r).filter((k) => tableCols.includes(k));
+            if (keys.length === 0) continue;
+            const placeholders = keys.map(() => '?').join(', ');
+            const values = keys.map((k) => {
+              const v = r[k];
+              if (v === undefined) return null;
+              return v as string | number | null;
+            });
+            db.prepare(`INSERT INTO ${tbl} (${keys.join(', ')}) VALUES (${placeholders})`).run(...values);
+          }
         }
-      }
-      db.exec('COMMIT;');
+      });
     } catch (err) {
-      db.exec('ROLLBACK;');
-      db.exec('PRAGMA foreign_keys = ON;');
       res.status(500).json({ error: `Transactional restore failed: ${(err as Error).message}` });
       return;
     }
-    db.exec('PRAGMA foreign_keys = ON;');
 
     recordAuditLog({
       actor,
@@ -3037,7 +3042,7 @@ export function registerApiRoutes(app: Express): void {
 
     const userId = uid('usr');
     const now = new Date().toISOString();
-    const hash = bcrypt.hashSync(parsed.data.password, 10);
+    const hash = hashPassword(parsed.data.password);
     const cleanName = sanitizeHtmlText(parsed.data.fullName);
 
     db.prepare(
@@ -3163,7 +3168,7 @@ export function registerApiRoutes(app: Express): void {
     );
 
     if (parsed.data.newPassword) {
-      const hash = bcrypt.hashSync(parsed.data.newPassword, 10);
+      const hash = hashPassword(parsed.data.newPassword);
       db.prepare(`UPDATE users SET passwordHash = ? WHERE id = ?`).run(hash, target.id);
     }
     if (parsed.data.newPassword || parsed.data.isActive === false) revokeAllSessionsForUser(target.id);
@@ -3213,7 +3218,7 @@ export function registerApiRoutes(app: Express): void {
     );
 
     if (parsed.data.newPassword) {
-      const hash = bcrypt.hashSync(parsed.data.newPassword, 10);
+      const hash = hashPassword(parsed.data.newPassword);
       db.prepare(`UPDATE users SET passwordHash = ? WHERE id = ?`).run(hash, actor.id);
     }
 
@@ -3240,8 +3245,7 @@ export function registerApiRoutes(app: Express): void {
       return;
     }
     if (!file.mimetype.startsWith('image/')) {
-      const targetPath = path.join(uploadDir, path.basename(file.filename));
-      if (fs.existsSync(targetPath)) fs.unlinkSync(targetPath);
+      deleteFile(file.filename);
       res.status(400).json({ error: 'Only image files are supported for avatars' });
       return;
     }
@@ -3278,7 +3282,7 @@ export function registerApiRoutes(app: Express): void {
     const row = db.prepare(`SELECT passwordHash FROM users WHERE id = ?`).get(actor.id) as
       | { passwordHash: string }
       | undefined;
-    if (!row || !bcrypt.compareSync(parsed.data.currentPassword, row.passwordHash)) {
+    if (!row || !verifyPassword(parsed.data.currentPassword, row.passwordHash)) {
       recordAuditLog({
         actor,
         action: 'AUTH_PASSWORD_CHANGE_FAILED',
@@ -3292,7 +3296,7 @@ export function registerApiRoutes(app: Express): void {
       return;
     }
 
-    const hash = bcrypt.hashSync(parsed.data.newPassword, 10);
+    const hash = hashPassword(parsed.data.newPassword);
     db.prepare(`UPDATE users SET passwordHash = ? WHERE id = ?`).run(hash, actor.id);
     revokeAllSessionsForUser(actor.id);
     const accessToken = signAccessToken({ userId: actor.id, email: actor.email, role: actor.role });

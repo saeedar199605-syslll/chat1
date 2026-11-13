@@ -4,51 +4,27 @@ import path from 'node:path';
 import express from 'express';
 import compression from 'compression';
 import { createServer as createViteServer } from 'vite';
-import './server/db';
-import { registerApiRoutes } from './server/routes';
+import './server/db-node';
+import { createApp } from './server/app';
 import { initSocketServer } from './server/socket';
+import { attachWebSocket } from './server/ws-node';
 import { setupSwagger } from './server/swagger';
 
 async function bootstrap() {
-  const app = express();
-  app.disable('x-powered-by');
-  if (process.env.TRUST_PROXY) app.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : process.env.TRUST_PROXY);
+  const isProd = process.env.NODE_ENV === 'production';
+  const app = createApp((a) => {
+    a.use(compression());
+    // Auto-generated Swagger API documentation at /api/docs
+    if (!isProd || process.env.ENABLE_DOCS === 'true') setupSwagger(a);
+  });
   const httpServer = http.createServer(app);
 
-  // Hardened HTTP security headers
-  app.use((_req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=()');
-    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-    next();
-  });
+  // Real-time hub (rooms, typing, huddles, WebRTC signaling) on /ws
+  attachWebSocket(httpServer, initSocketServer());
 
-  app.use(compression());
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true }));
-
-  // Auto-generated Swagger API documentation at /api/docs
-  if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DOCS === 'true') setupSwagger(app);
-
-  // REST API & S3-compatible local upload/download routes
-  registerApiRoutes(app);
-
-  app.use('/api', (_req, res) => {
-    res.status(404).json({ error: 'Not found' });
-  });
-
-  // Real-time Socket.io + WebRTC signaling gateway
-  initSocketServer(httpServer);
-
-  const isProd = process.env.NODE_ENV === 'production';
   if (!isProd) {
     const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        hmr: process.env.DISABLE_HMR !== 'true',
-      },
+      server: { middlewareMode: true, hmr: process.env.DISABLE_HMR !== 'true' },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -68,14 +44,6 @@ async function bootstrap() {
       res.sendFile(path.join(distDir, 'index.html'));
     });
   }
-
-  // JSON errors for malformed bodies, upload limits, etc. (never leak stack traces)
-  app.use((err: { status?: number; code?: string; message?: string }, _req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (res.headersSent) return next(err);
-    const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : err.status && err.status >= 400 && err.status < 500 ? err.status : 500;
-    if (status === 500) console.error(err);
-    res.status(status).json({ error: status === 500 ? 'Internal server error' : err.message || 'Bad request' });
-  });
 
   const port = Number(process.env.PORT || 3000);
   httpServer.listen(port, '0.0.0.0', () => {

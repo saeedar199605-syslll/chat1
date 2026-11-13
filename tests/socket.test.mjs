@@ -1,11 +1,11 @@
-import { io } from 'socket.io-client';
+import { io } from '../src/lib/wsClient.ts';
 const BASE = process.env.BASE || 'http://localhost:3111';
 let pass = 0, fail = 0; const fails = [];
 const ok = (n, c, x) => { if (c) pass++; else { fail++; fails.push(n + (x ? ' ' + JSON.stringify(x).slice(0, 200) : '')); } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function login(email, password = 'Workstream!2026') { const r = await fetch(BASE + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) }); return (await r.json()).accessToken; }
 const api = (tok, m, p, b) => fetch(BASE + p, { method: m, headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }).then((r) => r.json());
-const connect = (token) => new Promise((res) => { const s = io(BASE, { auth: { token }, transports: ['websocket'], reconnection: false }); s.on('connect', () => res({ s, err: null })); s.on('connect_error', (e) => res({ s, err: e.message })); });
+const connect = (token) => new Promise((res) => { const s = io({ url: BASE.replace(/^http/, 'ws'), auth: { token }, reconnection: false }); s.on('connect', () => res({ s, err: null })); s.on('connect_error', (e) => res({ s, err: e.message })); });
 function collect(s, evs) { const log = []; for (const e of evs) s.on(e, (d) => log.push([e, d])); return log; }
 
 const aT = await login('elena.rostova@acme.io'), mT = await login('marcus.vance@acme.io'), dT = await login('dariush.farahani@acme.io'), gT = await login('lucas.kim@acme.io');

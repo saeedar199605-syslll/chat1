@@ -10,3 +10,5 @@ data/
 *.zip
 .claude/
 graphify-out/
+.wrangler/
+.dev.vars

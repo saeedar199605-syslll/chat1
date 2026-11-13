@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { io, type Socket } from 'socket.io-client';
+import { io, type Socket } from '../lib/wsClient';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '../store/useAppStore';
 import type { Message, NotificationItem, TaskItem, WikiDoc } from '../types/index';

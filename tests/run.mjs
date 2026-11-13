@@ -25,7 +25,7 @@ async function waitForServer() {
 
 function run(file) {
   return new Promise((resolve) => {
-    const p = spawn(process.execPath, [path.join('tests', file)], { env: { ...process.env, BASE }, stdio: 'inherit' });
+    const p = spawn(process.execPath, ['--import', 'tsx', path.join('tests', file)], { env: { ...process.env, BASE }, stdio: 'inherit' });
     p.on('exit', (code) => resolve(code ?? 1));
   });
 }
@@ -37,6 +37,9 @@ try {
   code = results.every((c) => c === 0) ? 0 : 1;
 } finally {
   server.kill();
-  fs.rmSync(dataDir, { recursive: true, force: true });
+  await new Promise((r) => (server.exitCode !== null ? r() : server.once('exit', r)));
+  try {
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  } catch {} // Windows may still hold the SQLite file briefly; it's a temp dir
 }
 process.exit(code);

@@ -1,0 +1,17 @@
+{
+  "name": "workstream-api",
+  "main": "worker.ts",
+  "compatibility_date": "2025-11-01",
+  "compatibility_flags": ["nodejs_compat", "enable_nodejs_http_server_modules"],
+  // iconv-lite (pulled in by Express) cannot load in workerd; the stub covers the UTF-8 paths Express uses.
+  "alias": { "iconv-lite": "./stubs/iconv-lite.js" },
+  "assets": {
+    "directory": "../dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/ws"]
+  },
+  "durable_objects": { "bindings": [{ "name": "APP", "class_name": "AppDO" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AppDO"] }],
+  "vars": { "NODE_ENV": "production", "MAX_UPLOAD_MB": "25" }
+}

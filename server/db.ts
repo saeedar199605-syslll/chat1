@@ -1,26 +1,41 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import crypto from 'node:crypto';
-import { DatabaseSync } from 'node:sqlite';
-import bcrypt from 'bcryptjs';
+import { Buffer } from 'node:buffer';
+import { hashPassword } from './password';
+import { putFile, fileExists } from './storage';
 
-const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(process.cwd(), 'data'));
-const UPLOAD_DIR = path.resolve(DATA_DIR, 'uploads');
-const BACKUP_DIR = path.resolve(DATA_DIR, 'backups');
-const DB_PATH = path.resolve(DATA_DIR, 'workstream.db');
+/**
+ * Runtime-agnostic database facade. Node installs node:sqlite (server/db-node.ts),
+ * Cloudflare installs Durable Object SQLite (cloudflare/worker.ts). Both are synchronous.
+ */
+export interface DbStatement {
+  get(...params: unknown[]): unknown;
+  all(...params: unknown[]): unknown[];
+  run(...params: unknown[]): unknown;
+}
+export interface DbImpl {
+  prepare(sql: string): DbStatement;
+  exec(sql: string): void;
+  transaction<T>(fn: () => T): T;
+}
 
-fs.mkdirSync(DATA_DIR, { recursive: true });
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-fs.mkdirSync(BACKUP_DIR, { recursive: true });
-
-export const uploadDir = UPLOAD_DIR;
-export const backupDir = BACKUP_DIR;
-export const db = new DatabaseSync(DB_PATH);
-
-db.exec('PRAGMA journal_mode = WAL;');
-db.exec('PRAGMA foreign_keys = ON;');
-db.exec('PRAGMA synchronous = NORMAL;'); // safe with WAL, far fewer fsyncs
-db.exec('PRAGMA busy_timeout = 5000;');
+let impl: DbImpl | null = null;
+export function setDb(next: DbImpl): void {
+  impl = next;
+}
+const cur = (): DbImpl => {
+  if (!impl) throw new Error('Database not initialised');
+  return impl;
+};
+export const db = {
+  // Typed loosely on purpose: call sites cast rows to their own shapes.
+  prepare: (sql: string) => cur().prepare(sql) as {
+    get(...p: any[]): any;
+    all(...p: any[]): any[];
+    run(...p: any[]): any;
+  },
+  exec: (sql: string): void => cur().exec(sql),
+  transaction: <T>(fn: () => T): T => cur().transaction(fn),
+};
 
 export function uid(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(8).toString('hex')}`;
@@ -46,6 +61,19 @@ export function initSchema(): void {
       dndStartHour INTEGER NOT NULL DEFAULT 19,
       dndEndHour INTEGER NOT NULL DEFAULT 8,
       managerId TEXT,
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS file_blobs (
+      key TEXT NOT NULL,
+      idx INTEGER NOT NULL,
+      data BLOB NOT NULL,
+      PRIMARY KEY (key, idx)
+    );
+
+    CREATE TABLE IF NOT EXISTS file_meta (
+      key TEXT PRIMARY KEY,
+      size INTEGER NOT NULL,
       createdAt TEXT NOT NULL
     );
 
@@ -362,8 +390,7 @@ export function initSchema(): void {
 }
 
 function writeSeedArtifact(storageKey: string, content: string): number {
-  const target = path.join(UPLOAD_DIR, storageKey);
-  fs.writeFileSync(target, content, 'utf-8');
+  putFile(storageKey, Buffer.from(content, 'utf-8'));
   return Buffer.byteLength(content, 'utf-8');
 }
 
@@ -415,10 +442,9 @@ function buildValidSamplePdfBuffer(): Buffer {
 
 function ensureSamplePdfArtifact(): void {
   const storageKey = 'seed-chalak-project-brief.pdf';
-  const target = path.join(UPLOAD_DIR, storageKey);
   const pdfBuf = buildValidSamplePdfBuffer();
-  if (!fs.existsSync(target)) {
-    fs.writeFileSync(target, pdfBuf);
+  if (!fileExists(storageKey)) {
+    putFile(storageKey, pdfBuf);
   }
   const existingAtt = db.prepare(`SELECT id FROM attachments WHERE storageKey = ?`).get(storageKey) as
     | { id: string }
@@ -441,7 +467,7 @@ export function seedDatabase(): void {
 
   const now = new Date();
   const minsAgo = (m: number) => new Date(now.getTime() - m * 60_000).toISOString();
-  const passwordHash = bcrypt.hashSync('Workstream!2026', 10);
+  const passwordHash = hashPassword('Workstream!2026');
 
   // 1. Seed Users with realistic organizational hierarchy
   const users = [
@@ -910,7 +936,7 @@ function bootstrapProduction(): void {
   db.prepare(
     `INSERT INTO users (id, email, passwordHash, fullName, displayName, avatarUrl, jobTitle, department, timezone, role, presence, managerId, createdAt)
      VALUES (?, ?, ?, ?, ?, NULL, 'Administrator', 'Management', ?, 'SUPER_ADMIN', 'ONLINE', NULL, ?)`
-  ).run(userId, email, bcrypt.hashSync(password, 12), process.env.ADMIN_NAME || 'Administrator', process.env.ADMIN_NAME || 'Administrator', process.env.TZ || 'UTC', now);
+  ).run(userId, email, hashPassword(password), process.env.ADMIN_NAME || 'Administrator', process.env.ADMIN_NAME || 'Administrator', process.env.TZ || 'UTC', now);
   db.prepare(`INSERT INTO workspaces (id, name, slug, domain, logoText, createdAt) VALUES (?, ?, ?, NULL, ?, ?)`).run(
     wsId, orgName, orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'workspace', Array.from(orgName).slice(0, 2).join(''), now
   );
@@ -925,9 +951,6 @@ function bootstrapProduction(): void {
   console.log(`Created initial Super Admin ${email} and workspace "${orgName}".`);
 }
 
-initSchema();
-if (SEED_DEMO) seedDatabase();
-else bootstrapProduction();
 
 // Specialize workspaces, role permission defaults, and enterprise workflow records for شرکت اصفهان چالاک (Esfahan Chalak Co.)
 function syncEsfahanChalakEnterpriseDefaults(): void {
@@ -1167,7 +1190,11 @@ function syncEsfahanChalakEnterpriseDefaults(): void {
   }
 }
 
-syncEsfahanChalakEnterpriseDefaults();
-if (SEED_DEMO) ensureSamplePdfArtifact();
-
-
+/** Create tables, then demo data (dev) or the first admin (production). Idempotent. */
+export function initDatabase(): void {
+  initSchema();
+  if (SEED_DEMO) seedDatabase();
+  else bootstrapProduction();
+  syncEsfahanChalakEnterpriseDefaults();
+  if (SEED_DEMO) ensureSamplePdfArtifact();
+}

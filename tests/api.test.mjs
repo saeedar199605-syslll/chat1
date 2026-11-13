@@ -160,6 +160,7 @@ let upl;
   await expect('presign guest in non member chan', g, 'POST', '/api/uploads/presign', { channelId: PRV, fileName: 'a.txt', mimeType: 'text/plain', sizeBytes: 5 }, [403, 404]);
   const fd = new FormData(); fd.append('file', new Blob(['data'], { type: 'text/plain' }), 'b.txt'); fd.append('channelId', CH);
   const r = await call(d, 'POST', '/api/uploads', fd, true); ok(`direct upload got ${r.s}`, r.s === 200 || r.s === 201, r.j);
+  if (r.j?.attachment?.url) { const back = await fetch(BASE + r.j.attachment.url); ok('uploaded bytes round-trip', (await back.text()) === 'data', back.status); const part = await fetch(BASE + r.j.attachment.url, { headers: { Range: 'bytes=1-2' } }); ok('range request', part.status === 206 && (await part.text()) === 'at', part.status); }
   const fdh = new FormData(); fdh.append('file', new Blob(['<script>1</script>'], { type: 'text/html' }), 'evil.html'); fdh.append('channelId', CH);
   const rh = await call(d, 'POST', '/api/uploads', fdh, true); console.log('html upload ->', rh.s, JSON.stringify(rh.j).slice(0, 150));
   if (rh.j?.attachment?.url) { const dr = await fetch(BASE + rh.j.attachment.url + (rh.j.attachment.url.includes('?') ? '&' : '?') + 'token=' + d); console.log('html download content-type:', dr.headers.get('content-type'), dr.headers.get('content-disposition'), dr.status); }
@@ -282,7 +283,7 @@ await expect('broadcast delete', a, 'DELETE', `/api/admin/broadcasts/${bc.j.broa
 
 // ---- Misc
 await expect('health', null, 'GET', '/api/health', undefined, 200);
-await expect('docs', null, 'GET', '/api/docs/', undefined, 200);
+await expect('docs', null, 'GET', '/api/docs/', undefined, [200, 404]);
 await expect('unknown api', a, 'GET', '/api/nope', undefined, [404]);
 const bad = await fetch(BASE + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{bad json' }); ok(`malformed json -> 400 got ${bad.status}`, bad.status === 400);
 // token in query allowed on every route? check it isn't logged -- informational
