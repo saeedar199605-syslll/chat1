@@ -13,5 +13,7 @@
   },
   "durable_objects": { "bindings": [{ "name": "APP", "class_name": "AppDO" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AppDO"] }],
+  "workers_dev": true,
+  "routes": [{ "pattern": "chat.sgpchalakhr.ir", "custom_domain": true }],
   "vars": { "NODE_ENV": "production", "MAX_UPLOAD_MB": "25" }
 }
