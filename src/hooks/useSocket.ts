@@ -36,6 +36,7 @@ export function useSocket() {
       reconnectionDelayMax: 4000,
     });
 
+    let channelsTimer: ReturnType<typeof setTimeout> | null = null;
     sharedSocket = socket;
     socketRef.current = socket;
 
@@ -82,7 +83,9 @@ export function useSocket() {
           return { messages: [...old.messages, message] };
         });
       }
-      queryClient.invalidateQueries({ queryKey: ['channels'] });
+      // Unread counts: coalesce bursts into one refetch (every message would otherwise cost every client a request).
+      if (channelsTimer) clearTimeout(channelsTimer);
+      channelsTimer = setTimeout(() => queryClient.invalidateQueries({ queryKey: ['channels'] }), 1500);
     });
 
     socket.on('message:updated', ({ channelId, message }: { channelId: string; message: Message }) => {
@@ -219,6 +222,7 @@ export function useSocket() {
     });
 
     return () => {
+      if (channelsTimer) clearTimeout(channelsTimer);
       socket.disconnect();
       if (sharedSocket === socket) sharedSocket = null;
     };

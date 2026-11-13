@@ -173,12 +173,28 @@ const storedBgOpacity =
 const storedNotifSound =
   typeof window !== 'undefined' ? localStorage.getItem('ws_notif_sound') !== 'false' : true;
 
+const stored = (k: string): string => {
+  try {
+    return (typeof window !== 'undefined' && localStorage.getItem(k)) || '';
+  } catch {
+    return '';
+  }
+};
+const remember = (k: string, v: string): void => {
+  try {
+    localStorage.setItem(k, v);
+  } catch {
+    /* private mode: just don't persist */
+  }
+};
+
 export const useAppStore = create<AppState>((set, get) => ({
   accessToken: typeof window !== 'undefined' ? localStorage.getItem('ws_access_token') : null,
   refreshToken: typeof window !== 'undefined' ? localStorage.getItem('ws_refresh_token') : null,
   currentUser: null,
-  activeWorkspaceId: '',
-  activeChannelId: '',
+  // Remembered so a reload can fetch channels/messages in parallel with the workspace list.
+  activeWorkspaceId: stored('ws_active_workspace'),
+  activeChannelId: stored('ws_active_channel'),
   railTab: 'chat',
   drawerTab: 'none',
   activeThreadMessageId: null,
@@ -228,10 +244,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearAuth: () => {
     localStorage.removeItem('ws_access_token');
     localStorage.removeItem('ws_refresh_token');
-    set({ accessToken: null, refreshToken: null, currentUser: null, railTab: 'chat' });
+    localStorage.removeItem('ws_active_workspace');
+    localStorage.removeItem('ws_active_channel');
+    set({ accessToken: null, refreshToken: null, currentUser: null, railTab: 'chat', activeWorkspaceId: '', activeChannelId: '' });
   },
-  setActiveWorkspaceId: (activeWorkspaceId) => set({ activeWorkspaceId }),
-  setActiveChannelId: (activeChannelId) => set({ activeChannelId, railTab: 'chat' }),
+  setActiveWorkspaceId: (activeWorkspaceId) => {
+    remember('ws_active_workspace', activeWorkspaceId);
+    set({ activeWorkspaceId });
+  },
+  setActiveChannelId: (activeChannelId) => {
+    remember('ws_active_channel', activeChannelId);
+    set({ activeChannelId, railTab: 'chat' });
+  },
   setRailTab: (railTab) => set({ railTab }),
   openThread: (messageId) => set({ activeThreadMessageId: messageId, drawerTab: 'thread' }),
   setDrawerTab: (drawerTab) => set({ drawerTab }),

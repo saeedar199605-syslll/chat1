@@ -31,8 +31,45 @@ import type {
   Workspace,
 } from '../types/index';
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number
+  ) {
+    super(message);
+  }
+}
+
+// One refresh at a time: parallel 401s (a page fires ~10 requests) must not each spend a refresh call.
+let refreshing: Promise<'ok' | 'invalid' | 'error'> | null = null;
+
+function refreshSession(): Promise<'ok' | 'invalid' | 'error'> {
+  refreshing ??= (async () => {
+    const { refreshToken, setAuth } = useAppStore.getState();
+    try {
+      const res = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAuth(data.accessToken, refreshToken!, data.user);
+        return 'ok' as const;
+      }
+      // Only a rejected token means "signed out"; 5xx/429/network blips must not log the user out.
+      return res.status === 401 || res.status === 400 ? ('invalid' as const) : ('error' as const);
+    } catch {
+      return 'error' as const;
+    }
+  })().finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+}
+
 async function request<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
-  const { accessToken, refreshToken, setAuth, clearAuth } = useAppStore.getState();
+  const { accessToken, refreshToken, clearAuth } = useAppStore.getState();
   const headers = new Headers(init.headers);
   if (accessToken) {
     headers.set('Authorization', `Bearer ${accessToken}`);
@@ -44,22 +81,14 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
   const res = await fetch(path, { ...init, headers });
 
   if (res.status === 401 && retry && refreshToken) {
-    const refRes = await fetch('/api/auth/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    });
-    if (refRes.ok) {
-      const data = await refRes.json();
-      setAuth(data.accessToken, refreshToken, data.user);
-      return request<T>(path, init, false);
-    }
-    clearAuth();
+    const outcome = await refreshSession();
+    if (outcome === 'ok') return request<T>(path, init, false);
+    if (outcome === 'invalid') clearAuth();
   }
 
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(errBody.error || `Request failed (${res.status})`);
+    throw new ApiError(errBody.error || `Request failed (${res.status})`, res.status);
   }
 
   return res.json();

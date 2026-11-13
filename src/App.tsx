@@ -18,8 +18,8 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import { api } from './lib/api';
-import { useSocket } from './hooks/useSocket';
+import { api, type ApiError } from './lib/api';
+import { getSharedSocket, useSocket } from './hooks/useSocket';
 import { useWebRTC } from './hooks/useWebRTC';
 import { useAppStore } from './store/useAppStore';
 import { LoginPage } from './components/LoginPage';
@@ -34,8 +34,8 @@ import { GlobalGlassTooltipLayer } from './components/GlassTooltip';
 import type { Message, TaskStatus, Workspace } from './types/index';
 import { lazyNamed } from './lib/lazyNamed';
 
-const RightDrawer = lazyNamed(() => import('./components/RightDrawer'), 'RightDrawer');
-const HuddleOverlay = lazyNamed(() => import('./components/HuddleOverlay'), 'HuddleOverlay');
+const RightDrawer = lazyNamed(() => import('./components/RightDrawer'), 'RightDrawer', { defer: true });
+const HuddleOverlay = lazyNamed(() => import('./components/HuddleOverlay'), 'HuddleOverlay', { defer: true });
 const OrgDirectoryView = lazyNamed(() => import('./components/OrgDirectoryView'), 'OrgDirectoryView');
 const FilesHubView = lazyNamed(() => import('./components/FilesHubView'), 'FilesHubView');
 const ActivityView = lazyNamed(() => import('./components/ActivityView'), 'ActivityView');
@@ -45,17 +45,18 @@ const TasksHubView = lazyNamed(() => import('./components/TasksHubView'), 'Tasks
 const UsersAccessView = lazyNamed(() => import('./components/UsersAccessView'), 'UsersAccessView');
 const WorkflowsView = lazyNamed(() => import('./components/WorkflowsView'), 'WorkflowsView');
 const SuperAdminView = lazyNamed(() => import('./components/SuperAdminView'), 'SuperAdminView');
-const FilePreviewModal = lazyNamed(() => import('./components/FilePreviewModal'), 'FilePreviewModal');
-const GlobalSearchModal = lazyNamed(() => import('./components/GlobalSearchModal'), 'GlobalSearchModal');
-const CreateChannelModal = lazyNamed(() => import('./components/CreateChannelModal'), 'CreateChannelModal');
-const AuthAndSettingsModal = lazyNamed(() => import('./components/AuthAndSettingsModal'), 'AuthAndSettingsModal');
-const ShortcutsModal = lazyNamed(() => import('./components/ShortcutsModal'), 'ShortcutsModal');
-const DailyToolsModal = lazyNamed(() => import('./components/DailyToolsModal'), 'DailyToolsModal');
+const FilePreviewModal = lazyNamed(() => import('./components/FilePreviewModal'), 'FilePreviewModal', { defer: true });
+const GlobalSearchModal = lazyNamed(() => import('./components/GlobalSearchModal'), 'GlobalSearchModal', { defer: true });
+const CreateChannelModal = lazyNamed(() => import('./components/CreateChannelModal'), 'CreateChannelModal', { defer: true });
+const AuthAndSettingsModal = lazyNamed(() => import('./components/AuthAndSettingsModal'), 'AuthAndSettingsModal', { defer: true });
+const ShortcutsModal = lazyNamed(() => import('./components/ShortcutsModal'), 'ShortcutsModal', { defer: true });
+const DailyToolsModal = lazyNamed(() => import('./components/DailyToolsModal'), 'DailyToolsModal', { defer: true });
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 15_000,
+      staleTime: 60_000, // the socket pushes changes; avoid refetch storms (Workers request quotas)
+      refetchOnWindowFocus: false,
       retry: 1,
     },
   },
@@ -110,14 +111,21 @@ function WorkstreamShell() {
     root.lang = locale;
   }, [theme, locale, glassMode]);
 
+  const [meTry, setMeTry] = useState(0);
   // Verify persisted session token, or auto-login only when ?autostart=1 is explicitly provided
   useEffect(() => {
     const autoStart = typeof window !== 'undefined' && window.location.search.includes('autostart=1');
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     if (accessToken && !currentUser) {
       api
         .me()
         .then((res) => setCurrentUser(res.user))
-        .catch(() => {
+        .catch((err) => {
+          // Only a rejected session logs out; a network/server hiccup keeps the token for the next try.
+          if ((err as ApiError).status !== 401) {
+            retryTimer = setTimeout(() => setMeTry((n) => n + 1), 3000);
+            return;
+          }
           if (autoStart) {
             api.demoSwitch('usr_elena').then((res) => setAuth(res.accessToken, res.refreshToken, res.user));
           } else {
@@ -127,7 +135,8 @@ function WorkstreamShell() {
     } else if (!accessToken && autoStart) {
       api.demoSwitch('usr_elena').then((res) => setAuth(res.accessToken, res.refreshToken, res.user));
     }
-  }, [accessToken, currentUser, setAuth, clearAuth, setCurrentUser]);
+    return () => clearTimeout(retryTimer);
+  }, [accessToken, currentUser, setAuth, clearAuth, setCurrentUser, meTry]);
 
   // Global keyboard shortcuts: Ctrl/Cmd+K for search, ? for cheat sheet
   useEffect(() => {
@@ -655,7 +664,8 @@ function WorkstreamShell() {
                 if (!activeChannel) return;
                 try {
                   await api.postMessage(activeChannel.id, payload);
-                  qc.invalidateQueries({ queryKey: ['messages', activeChannel.id] });
+                  // The socket pushes our own message back; refetch the list only if it is down.
+                  if (!getSharedSocket()?.connected) qc.invalidateQueries({ queryKey: ['messages', activeChannel.id] });
                   qc.invalidateQueries({ queryKey: ['tasks', activeChannel.id] });
                 } catch (err) {
                   showToast((err as Error).message, 'error');

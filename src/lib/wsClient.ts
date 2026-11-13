@@ -87,7 +87,7 @@ export class Socket {
         this.connected = true;
         this.attempts = 0;
         this.id = (msg.d as { id?: string })?.id;
-        this.pinger = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send('{"e":"__ping"}'), 25_000);
+        this.pinger = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send('{"e":"__ping"}'), 45_000); // Cloudflare drops sockets idle for 100s
         this.fire('connect');
       } else if (msg.e === '__error') {
         this.fatal = true; // bad/expired token: retrying with the same credentials is pointless
