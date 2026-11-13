@@ -1,0 +1,403 @@
+// Normalized Enterprise Schema for Workstream (PostgreSQL 16 + Prisma ORM)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  DEPT_MANAGER
+  MEMBER
+  GUEST
+}
+
+enum PresenceStatus {
+  ONLINE
+  IN_MEETING
+  FOCUS_MODE
+  AWAY
+  OFFLINE
+}
+
+enum ChannelType {
+  PUBLIC
+  PRIVATE
+  ANNOUNCEMENT
+  DM
+  GROUP_DM
+}
+
+enum MessageType {
+  TEXT
+  POLL
+  TASK
+  SYSTEM
+  CALL_SUMMARY
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum CallType {
+  HUDDLE
+  MEETING
+  SCREEN_SHARE
+}
+
+enum NotificationType {
+  MENTION
+  THREAD_REPLY
+  REACTION
+  MISSED_CALL
+  TASK_ASSIGNED
+  SYSTEM
+}
+
+model User {
+  id              String         @id @default(cuid())
+  email           String         @unique
+  passwordHash    String
+  fullName        String
+  displayName     String
+  avatarUrl       String?
+  jobTitle        String
+  department      String
+  timezone        String         @default("America/Los_Angeles")
+  role            Role           @default(MEMBER)
+  presence        PresenceStatus @default(ONLINE)
+  customStatus    String?
+  customEmoji     String?
+  dndEnabled      Boolean        @default(false)
+  dndStartHour    Int            @default(19)
+  dndEndHour      Int            @default(8)
+  managerId       String?
+  manager         User?          @relation("OrgHierarchy", fields: [managerId], references: [id])
+  subordinates    User[]         @relation("OrgHierarchy")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  refreshTokens   RefreshToken[]
+  workspaces      WorkspaceMember[]
+  channels        ChannelMember[]
+  messages        Message[]
+  reactions       Reaction[]
+  bookmarks       Bookmark[]
+  pollVotes       PollVote[]
+  assignedTasks   Task[]         @relation("TaskAssignee")
+  createdTasks    Task[]         @relation("TaskCreator")
+  hostedCalls     Call[]         @relation("CallHost")
+  callSessions    CallParticipant[]
+  notifications   Notification[]
+  attachments     Attachment[]
+
+  @@index([department])
+  @@index([managerId])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Workspace {
+  id          String            @id @default(cuid())
+  name        String
+  slug        String            @unique
+  domain      String?
+  logoText    String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  members     WorkspaceMember[]
+  channels    Channel[]
+  customEmojis CustomEmoji[]
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        Role      @default(MEMBER)
+  joinedAt    DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model Channel {
+  id          String          @id @default(cuid())
+  workspaceId String
+  name        String
+  slug        String
+  description String?
+  topic       String?
+  type        ChannelType     @default(PUBLIC)
+  isStarred   Boolean         @default(false)
+  isMuted     Boolean         @default(false)
+  createdById String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members     ChannelMember[]
+  messages    Message[]
+  wikiDoc     WikiDoc?
+  tasks       Task[]
+  calls       Call[]
+  attachments Attachment[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, type])
+}
+
+model ChannelMember {
+  id           String    @id @default(cuid())
+  channelId    String
+  userId       String
+  isStarred    Boolean   @default(false)
+  isMuted      Boolean   @default(false)
+  lastReadAt   DateTime  @default(now())
+  joinedAt     DateTime  @default(now())
+
+  channel      Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id            String               @id @default(cuid())
+  channelId     String
+  authorId      String
+  parentId      String?
+  type          MessageType          @default(TEXT)
+  content       String
+  isPinned      Boolean              @default(false)
+  isEdited      Boolean              @default(false)
+  deletedAt     DateTime?
+  readByUserIds String[]             @default([])
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  channel       Channel              @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author        User                 @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent        Message?             @relation("MessageThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies       Message[]            @relation("MessageThread")
+  editHistory   MessageEditHistory[]
+  attachments   Attachment[]
+  reactions     Reaction[]
+  bookmarks     Bookmark[]
+  poll          Poll?
+  task          Task?
+
+  @@index([channelId, createdAt])
+  @@index([parentId])
+  @@index([authorId])
+}
+
+model MessageEditHistory {
+  id              String   @id @default(cuid())
+  messageId       String
+  previousContent String
+  editedAt        DateTime @default(now())
+
+  message         Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model Attachment {
+  id           String   @id @default(cuid())
+  messageId    String?
+  channelId    String
+  uploaderId   String
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String   @unique
+  url          String
+  thumbnailUrl String?
+  createdAt    DateTime @default(now())
+
+  message      Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  channel      Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  uploader     User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt])
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId])
+}
+
+model Poll {
+  id        String       @id @default(cuid())
+  messageId String       @unique
+  question  String
+  expiresAt DateTime?
+  createdAt DateTime     @default(now())
+
+  message   Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  options   PollOption[]
+}
+
+model PollOption {
+  id        String     @id @default(cuid())
+  pollId    String
+  label     String
+  sortOrder Int        @default(0)
+
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes     PollVote[]
+
+  @@index([pollId])
+}
+
+model PollVote {
+  id        String     @id @default(cuid())
+  optionId  String
+  userId    String
+  createdAt DateTime   @default(now())
+
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([optionId, userId])
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  channelId   String
+  messageId   String?    @unique
+  creatorId   String
+  assigneeId  String?
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  dueDate     DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  channel     Channel    @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  message     Message?   @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  creator     User       @relation("TaskCreator", fields: [creatorId], references: [id])
+  assignee    User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  @@index([channelId, status])
+}
+
+model WikiDoc {
+  id          String   @id @default(cuid())
+  channelId   String   @unique
+  title       String
+  content     String
+  version     Int      @default(1)
+  updatedById String
+  updatedAt   DateTime @updatedAt
+
+  channel     Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model Call {
+  id           String            @id @default(cuid())
+  channelId    String
+  hostId       String
+  type         CallType          @default(HUDDLE)
+  title        String
+  isActive     Boolean           @default(true)
+  isRecording  Boolean           @default(false)
+  startedAt    DateTime          @default(now())
+  endedAt      DateTime?
+
+  channel      Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  host         User              @relation("CallHost", fields: [hostId], references: [id])
+  participants CallParticipant[]
+
+  @@index([channelId, isActive])
+}
+
+model CallParticipant {
+  id          String    @id @default(cuid())
+  callId      String
+  userId      String
+  isMuted     Boolean   @default(false)
+  isCameraOn  Boolean   @default(false)
+  isScreenOn  Boolean   @default(false)
+  handRaised  Boolean   @default(false)
+  joinedAt    DateTime  @default(now())
+  leftAt      DateTime?
+
+  call        Call      @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([callId, userId])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  type        NotificationType
+  title       String
+  body        String
+  channelId   String?
+  messageId   String?
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+}
+
+model CustomEmoji {
+  id          String    @id @default(cuid())
+  workspaceId String
+  shortcode   String
+  glyph       String
+  createdAt   DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, shortcode])
+}

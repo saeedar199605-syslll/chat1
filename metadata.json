@@ -1,0 +1,6 @@
+{
+  "name": "Workstream",
+  "description": "Enterprise Organizational Communication & Collaboration Platform with real-time messaging, WebRTC huddles, screen sharing, collaborative wikis, and RBAC.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
